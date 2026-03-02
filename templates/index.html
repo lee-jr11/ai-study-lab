@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lee's AI Lab</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --theme-color: #60a5fa; 
+            --success: #10b981;
+            --error: #ef4444;
+
+            --bg-base: #020617;
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --card-shadow: rgba(0, 0, 0, 0.8);
+            --input-bg: rgba(0, 0, 0, 0.4);
+            --input-border: #334155;
+            --scanner-bg: rgba(2, 6, 23, 0.95);
+            --question-bg: rgba(0, 0, 0, 0.4);
+            --option-bg: rgba(255, 255, 255, 0.03);
+            --option-border: rgba(255, 255, 255, 0.1);
+        }
+
+        [data-theme="light"] {
+            --bg-base: #f1f5f9;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --card-shadow: rgba(0, 0, 0, 0.05);
+            --input-bg: rgba(255, 255, 255, 0.6);
+            --input-border: #cbd5e1;
+            --scanner-bg: rgba(241, 245, 249, 0.95);
+            --question-bg: rgba(255, 255, 255, 0.8);
+            --option-bg: rgba(255, 255, 255, 0.9);
+            --option-border: #cbd5e1;
+        }
+
+        body, html {
+            margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
+            color: var(--text-main); min-height: 100vh; overflow-x: hidden;
+            background-color: var(--bg-base); transition: background-color 0.5s ease, color 0.5s ease;
+        }
+
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px; background: var(--glass-bg);
+            border: 1px solid var(--glass-border); color: var(--text-main);
+            width: 45px; height: 45px; border-radius: 50%; cursor: pointer;
+            z-index: 100; display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--card-shadow);
+        }
+
+        .theme-toggle:hover { transform: scale(1.1) rotate(15deg); border-color: var(--theme-color); }
+
+        .ambient-bg {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at 15% 50%, rgba(96, 165, 250, 0.12), transparent 50%),
+                        radial-gradient(circle at 85% 30%, rgba(192, 132, 252, 0.12), transparent 50%);
+            z-index: -1; animation: breathe 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes breathe { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.1); opacity: 1; } }
+
+        .container {
+            width: 100%; max-width: 650px; margin: 60px auto;
+            perspective: 1000px; position: relative; z-index: 10;
+        }
+
+        .header { text-align: center; margin-bottom: 40px; pointer-events: none; }
+        .header h1 { font-size: 3.5rem; margin: 0 0 5px 0; font-weight: 700; letter-spacing: -1px; color: var(--text-main); transition: color 0.5s ease; }
+        .header h1 .ai-text {
+            background: linear-gradient(to right, var(--theme-color), #c084fc);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; transition: all 0.5s ease;
+        }
+
+        .glass-card {
+            background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border); border-radius: 24px; padding: 40px;
+            box-shadow: 0 25px 50px -12px var(--card-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+            transition: transform 0.1s ease, box-shadow 0.3s ease, background 0.5s ease, border-color 0.5s ease;
+            transform-style: preserve-3d;
+        }
+
+        .form-group { margin-bottom: 30px; transform: translateZ(20px); }
+        .label-wrap { display: flex; align-items: center; margin-bottom: 12px; font-weight: 500; color: var(--text-muted); transition: color 0.5s ease; }
+        .label-wrap svg { width: 18px; height: 18px; margin-right: 8px; stroke: var(--theme-color); transition: stroke 0.5s ease; }
+
+        input[type="file"] { display: none; }
+        .file-upload-label {
+            display: flex; align-items: center; justify-content: center; width: 100%; padding: 30px;
+            background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px;
+            color: var(--text-muted); cursor: pointer; transition: all 0.3s ease; box-sizing: border-box; font-size: 1.05rem;
+        }
+        .file-upload-label:hover { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); }
+
+        .slider-container { position: relative; width: 100%; padding: 10px 0; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; outline: none; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; transition: background 0.5s ease; }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: var(--theme-color); margin-top: -7px; cursor: pointer; box-shadow: 0 0 15px var(--theme-color);
+            transition: background 0.5s ease, box-shadow 0.5s ease;
+        }
+        .slider-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+        .slider-labels span { transition: color 0.3s ease; }
+        .slider-labels span.active { color: var(--text-main); font-weight: 700; }
+
+        input[type="number"] {
+            width: 100%; padding: 15px; background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 12px; color: var(--text-main); font-size: 1.1rem; font-family: inherit; box-sizing: border-box;
+            outline: none; transition: border-color 0.3s ease, background 0.5s ease, color 0.5s ease;
+        }
+        input[type="number"]:focus { border-color: var(--theme-color); }
+
+        .input-helper {
+            font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;
+            padding-left: 5px; transition: color 0.5s ease; font-weight: 400;
+        }
+
+        button.generate-btn {
+            width: 100%; background: var(--theme-color); color: #020617; border: none; padding: 18px;
+            border-radius: 12px; font-size: 1.15rem; font-weight: 700; letter-spacing: 1px; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
+            position: relative; overflow: hidden; transform: translateZ(30px); margin-top: 10px;
+        }
+        button.generate-btn::after {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 60%);
+            opacity: 0; transition: opacity 0.3s; transform: scale(0.5);
+        }
+        button.generate-btn:hover:not(:disabled) { transform: translateZ(35px) scale(1.02); box-shadow: 0 0 30px var(--theme-color); }
+        button.generate-btn:hover:not(:disabled)::after { opacity: 1; transform: scale(1); }
+        button:disabled { background: var(--input-border); color: var(--text-muted); cursor: not-allowed; box-shadow: none; transform: none; }
+        
+        button.ghost-btn { background: transparent; border: 1px solid var(--theme-color); color: var(--theme-color); box-shadow: none; }
+        button.ghost-btn:hover:not(:disabled) { background: rgba(96, 165, 250, 0.1); }
+
+        .tagline { text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 15px; transform: translateZ(20px); transition: color 0.5s ease; }
+
+        #scanner-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--scanner-bg);
+            z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.5s ease, background 0.5s ease;
+        }
+        .scan-line { position: absolute; width: 100%; height: 2px; background: var(--theme-color); box-shadow: 0 0 20px 5px var(--theme-color); top: 0; animation: scan 2.5s linear infinite; }
+        @keyframes scan { 0% { top: 10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 90%; opacity: 0; } }
+        .scanner-text { font-size: 1.5rem; font-weight: 300; letter-spacing: 4px; color: var(--text-main); text-transform: uppercase; margin-bottom: 20px; }
+        .floating-keyword { position: absolute; color: var(--theme-color); font-family: monospace; font-size: 0.9rem; opacity: 0; animation: floatWord 2s ease-out forwards; }
+        @keyframes floatWord { 0% { transform: translateY(20px); opacity: 0; } 20% { opacity: 0.8; } 80% { opacity: 0.8; } 100% { transform: translateY(-20px); opacity: 0; } }
+
+        /* Quiz UI */
+        #quiz-container, #result-container, #review-container { display: none; }
+        
+        .progress-wrapper { margin-bottom: 30px; }
+        .progress-bar-bg { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--theme-color); width: 0%; transition: width 0.4s ease; }
+        .progress-text { margin-top: 10px; font-size: 0.9rem; color: var(--text-muted); font-weight: 500; display: flex; justify-content: space-between; }
+
+        .question-text { font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; font-weight: 500;}
+        
+        .option-btn {
+            display: flex; align-items: center; width: 100%; text-align: left; background: var(--option-bg);
+            border: 1px solid var(--option-border); color: var(--text-main); padding: 12px 16px;
+            border-radius: 12px; margin-bottom: 15px; cursor: pointer; font-size: 1.05rem;
+            transition: all 0.2s ease;
+        }
+        .option-label {
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            width: 32px; height: 32px; background: var(--input-bg); border: 1px solid var(--option-border);
+            border-radius: 8px; margin-right: 15px; font-weight: 700; font-size: 1rem;
+            color: var(--text-muted); transition: all 0.2s ease;
+        }
+        .option-text { flex-grow: 1; line-height: 1.4; }
+        .option-btn:hover { border-color: var(--theme-color); transform: translateX(5px); }
+        .option-btn:hover .option-label { background: var(--theme-color); color: var(--bg-base); border-color: var(--theme-color); }
+        
+        .option-btn.selected { border-color: var(--theme-color); box-shadow: 0 0 15px rgba(96, 165, 250, 0.2); transform: translateX(5px); }
+        .option-btn.selected .option-label { background: var(--theme-color); color: var(--bg-base); border-color: var(--theme-color); }
+        
+        .nav-buttons { display: flex; gap: 15px; margin-top: 30px; }
+        .nav-btn { flex: 1; }
+        .nav-btn.secondary { background: var(--input-bg); color: var(--text-main); box-shadow: none; border: 1px solid var(--option-border); }
+        .nav-btn.secondary:hover { border-color: var(--text-muted); box-shadow: none; transform: translateY(-2px); }
+
+        /* Results Screen */
+        .result-icon { font-size: 4rem; margin-bottom: 10px; }
+        .result-title { font-size: 2.5rem; margin: 0 0 10px 0; color: var(--text-main); }
+        .result-score { font-size: 5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 20px 0; }
+        .result-subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 40px; }
+
+        /* Review Screen */
+        .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); }
+        .review-block { background: var(--question-bg); padding: 25px; border-radius: 16px; border: 1px solid var(--option-border); margin-bottom: 20px; text-align: left; }
+        .review-q { font-size: 1.15rem; font-weight: 500; margin-bottom: 15px; color: var(--text-main); line-height: 1.5; }
+        .review-ans { font-size: 1rem; margin-bottom: 8px; padding: 12px 15px; border-radius: 8px; font-weight: 500;}
+        .review-ans.correct { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .review-ans.wrong { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
+        .ai-insight { background: rgba(96, 165, 250, 0.05); border-left: 4px solid var(--theme-color); padding: 15px 20px; margin-top: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; }
+        .ai-insight strong { color: var(--theme-color); font-weight: 600; display: block; margin-bottom: 5px;}
+    </style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle Theme">
+    <svg id="themeIcon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+    </svg>
+</button>
+
+<div class="ambient-bg"></div>
+
+<div class="container">
+    <div class="header" id="main-header">
+        <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
+    </div>
+
+    <div class="glass-card" id="main-card">
+        <form id="quizForm">
+            <div class="form-group">
+                <div class="label-wrap">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>
+                    Upload Module
+                </div>
+                <label class="file-upload-label" id="drop-zone" for="document">
+                    <span id="file-name-display">Drop PDF / PPTX here or click to browse</span>
+                </label>
+                <input type="file" id="document" name="document" accept=".pdf, .pptx" required>
+            </div>
+            
+            <div class="form-group">
+                <div class="label-wrap">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Intelligence Level
+                </div>
+                <div class="slider-container">
+                    <input type="range" id="difficulty-slider" min="1" max="3" value="2">
+                    <input type="hidden" id="difficulty-hidden" name="difficulty" value="medium">
+                    <div class="slider-labels">
+                        <span id="lbl-1">Basic</span>
+                        <span id="lbl-2" class="active">Intermediate</span>
+                        <span id="lbl-3">Genius Mode</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="label-wrap">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
+                    Target Output
+                </div>
+                <input type="number" id="num_questions" name="num_questions" value="10" min="1" max="30" required>
+                <p class="input-helper">target output shouldn't be greater than 30 questions
+            </div>
+
+            <button type="submit" class="generate-btn" id="submitBtn">GENERATE</button>
+            <p class="tagline">Build smarter exams in seconds.</p>
+        </form>
+
+        <div id="quiz-container">
+            <div class="progress-wrapper">
+                <div class="progress-bar-bg"><div class="progress-fill" id="progress-fill"></div></div>
+                <div class="progress-text">
+                    <span id="progress-count">Question 1 of 10</span>
+                    <span id="progress-percent">10%</span>
+                </div>
+            </div>
+
+            <div id="active-question-area">
+                <div class="question-text" id="q-text">Loading...</div>
+                <div id="q-options"></div>
+            </div>
+
+            <div class="nav-buttons">
+                <button class="generate-btn nav-btn secondary" id="prevBtn" style="display: none;">Back</button>
+                <button class="generate-btn nav-btn" id="nextBtn" disabled>Next Question</button>
+                <button class="generate-btn nav-btn" id="submitQuizBtn" style="display: none;" disabled>Submit Test</button>
+            </div>
+        </div>
+
+        <div id="result-container" style="text-align: center;">
+            <div class="result-icon" id="result-emoji">🏆</div>
+            <h2 class="result-title" id="result-title">Outstanding!</h2>
+            <div class="result-score" id="result-score">100%</div>
+            <p class="result-subtitle" id="result-subtitle">You absolutely crushed this module.</p>
+            
+            <button class="generate-btn" onclick="retakeQuiz()">Retake This Test</button>
+            <button class="generate-btn ghost-btn" style="margin-top: 15px;" onclick="showReview()">Review Answers & Insights</button>
+            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">Upload New Module</button>
+        </div>
+
+        <div id="review-container">
+            <div class="review-header">
+                <h2 style="margin: 0; color: var(--text-main);">Module Breakdown</h2>
+                <button class="generate-btn secondary" style="width: auto; padding: 10px 20px; margin: 0; transform: none;" onclick="hideReview()">Back to Score</button>
+            </div>
+            <div id="review-content"></div>
+        </div>
+    </div>
+</div>
+
+<div id="scanner-overlay">
+    <div class="scan-line"></div>
+    <div class="scanner-text" id="scan-status">Analyzing Architecture</div>
+    <div style="color: var(--theme-color); font-family: monospace; opacity: 0.8;" id="scan-filename"></div>
+</div>
+
+<script>
+    // Theme Logic
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    const rootEl = document.documentElement;
+    const sunIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />';
+    const moonIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />';
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+    rootEl.setAttribute('data-theme', currentTheme);
+    themeIcon.innerHTML = currentTheme === 'dark' ? sunIcon : moonIcon;
+
+    themeToggle.addEventListener('click', () => {
+        let theme = rootEl.getAttribute('data-theme');
+        let newTheme = theme === 'dark' ? 'light' : 'dark';
+        rootEl.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        themeIcon.innerHTML = newTheme === 'dark' ? sunIcon : moonIcon;
+    });
+
+    // 3D Card Hover
+    const root = document.documentElement;
+    const card = document.getElementById('main-card');
+    document.addEventListener('mousemove', (e) => {
+        if(document.getElementById('quizForm').style.display === 'none') return;
+        let rect = card.getBoundingClientRect();
+        let rotateX = (((e.clientY - rect.top) / rect.height) - 0.5) * -10;
+        let rotateY = (((e.clientX - rect.left) / rect.width) - 0.5) * 10;
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    });
+    card.addEventListener('mouseleave', () => card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`);
+
+    // Slider Logic
+    const slider = document.getElementById('difficulty-slider');
+    const hiddenInput = document.getElementById('difficulty-hidden');
+    const labels = [document.getElementById('lbl-1'), document.getElementById('lbl-2'), document.getElementById('lbl-3')];
+    slider.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value);
+        labels.forEach(l => l.classList.remove('active'));
+        labels[val-1].classList.add('active');
+        if(val === 1) { root.style.setProperty('--theme-color', '#10b981'); hiddenInput.value = "easy"; } 
+        else if(val === 2) { root.style.setProperty('--theme-color', '#60a5fa'); hiddenInput.value = "medium"; } 
+        else { root.style.setProperty('--theme-color', '#c084fc'); hiddenInput.value = "hard"; }
+    });
+
+    // File Upload
+    const fileInput = document.getElementById('document');
+    fileInput.addEventListener('change', function(e) {
+        if (e.target.files[0]?.name) {
+            document.getElementById('file-name-display').innerText = e.target.files[0].name;
+            document.getElementById('drop-zone').style.borderColor = "var(--theme-color)";
+            document.getElementById('drop-zone').style.color = "var(--theme-color)";
+            document.getElementById('drop-zone').style.borderStyle = "solid";
+        }
+    });
+
+    // Core State
+    let quizData = [];
+    let userAnswers = [];
+    let currentIndex = 0;
+
+    // Initialization
+    document.getElementById('quizForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const scanner = document.getElementById('scanner-overlay');
+        scanner.style.display = 'flex';
+        document.getElementById('scan-filename').innerText = fileInput.files[0]?.name || "Extracting...";
+        setTimeout(() => scanner.style.opacity = '1', 10);
+        
+        const techWords = ["Synthesizing", "Extracting", "Evaluating", "Logic Processing", "Structuring"];
+        let wordInterval = setInterval(() => {
+            const word = document.createElement('div');
+            word.className = 'floating-keyword';
+            word.innerText = techWords[Math.floor(Math.random() * techWords.length)];
+            word.style.left = Math.random() * 80 + 10 + '%'; word.style.top = Math.random() * 80 + 10 + '%';
+            scanner.appendChild(word); setTimeout(() => word.remove(), 2000);
+        }, 600);
+
+        try {
+            const response = await fetch('/generate', { method: 'POST', body: new FormData(e.target) });
+            const data = await response.json();
+            clearInterval(wordInterval);
+            
+            if (!response.ok) throw new Error(data.error);
+            
+            quizData = data.quiz;
+            userAnswers = new Array(quizData.length).fill(null);
+            currentIndex = 0;
+            
+            e.target.style.display = 'none';
+            document.getElementById('quiz-container').style.display = 'block';
+            card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`; 
+            
+            renderQuestion();
+            scanner.style.opacity = '0';
+            setTimeout(() => scanner.style.display = 'none', 500);
+
+        } catch (error) {
+            clearInterval(wordInterval);
+            alert('Error: ' + error.message);
+            scanner.style.opacity = '0';
+            setTimeout(() => scanner.style.display = 'none', 500);
+        }
+    });
+
+    // Render Quiz Logic
+    function renderQuestion() {
+        const q = quizData[currentIndex];
+        const progress = ((currentIndex + 1) / quizData.length) * 100;
+        document.getElementById('progress-fill').style.width = `${progress}%`;
+        document.getElementById('progress-count').innerText = `Question ${currentIndex + 1} of ${quizData.length}`;
+        document.getElementById('progress-percent').innerText = `${Math.round(progress)}%`;
+
+        document.getElementById('q-text').innerText = q.question;
+        const optionsContainer = document.getElementById('q-options');
+        optionsContainer.innerHTML = '';
+
+        const letterLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+        q.options.forEach((opt, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            
+            const letter = letterLabels[idx] || '-';
+            btn.innerHTML = `<span class="option-label">${letter}</span> <span class="option-text">${opt}</span>`;
+            
+            if (userAnswers[currentIndex] === opt) btn.classList.add('selected');
+
+            btn.onclick = () => {
+                userAnswers[currentIndex] = opt;
+                renderQuestion(); 
+            };
+            optionsContainer.appendChild(btn);
+        });
+
+        const nextBtn = document.getElementById('nextBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const submitBtn = document.getElementById('submitQuizBtn');
+
+        prevBtn.style.display = currentIndex > 0 ? 'block' : 'none';
+        const hasAnswered = userAnswers[currentIndex] !== null;
+
+        if (currentIndex === quizData.length - 1) {
+            nextBtn.style.display = 'none';
+            submitBtn.style.display = 'block';
+            submitBtn.disabled = !hasAnswered;
+        } else {
+            nextBtn.style.display = 'block';
+            submitBtn.style.display = 'none';
+            nextBtn.disabled = !hasAnswered;
+        }
+    }
+
+    document.getElementById('nextBtn').addEventListener('click', () => { if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); } });
+    document.getElementById('prevBtn').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; renderQuestion(); } });
+
+    // Submit & Confetti Logic
+    function fireConfetti() {
+        var duration = 3000;
+        var end = Date.now() + duration;
+
+        (function frame() {
+            confetti({
+                particleCount: 5,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 },
+                colors: ['#60a5fa', '#10b981', '#c084fc']
+            });
+            confetti({
+                particleCount: 5,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 },
+                colors: ['#60a5fa', '#10b981', '#c084fc']
+            });
+
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        }());
+    }
+
+    document.getElementById('submitQuizBtn').addEventListener('click', () => {
+        let score = 0;
+        quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
+        const percent = Math.round((score / quizData.length) * 100);
+        
+        let emoji, title, subtitle;
+        if (percent >= 90) { 
+            emoji = "🏆"; title = "Outstanding!"; subtitle = "Genius level unlocked. You crushed this."; 
+            fireConfetti();
+        } else if (percent >= 70) { 
+            emoji = "🔥"; title = "Great Work!"; subtitle = "You have a solid grip on this material."; 
+            fireConfetti();
+        } else if (percent >= 50) { 
+            emoji = "📈"; title = "Almost There."; subtitle = "Good effort, but you should review these concepts."; 
+        } else { 
+            emoji = "🧠"; title = "Keep Pushing.", subtitle = "Tough module. Better check the insights and try again."; 
+        }
+
+        document.getElementById('result-emoji').innerText = emoji;
+        document.getElementById('result-title').innerText = title;
+        document.getElementById('result-score').innerText = `${percent}%`;
+        document.getElementById('result-subtitle').innerText = subtitle;
+
+        document.getElementById('quiz-container').style.display = 'none';
+        document.getElementById('result-container').style.display = 'block';
+    });
+
+    // Review Logic
+    function showReview() {
+        document.getElementById('result-container').style.display = 'none';
+        document.getElementById('review-container').style.display = 'block';
+        
+        const content = document.getElementById('review-content');
+        content.innerHTML = '';
+
+        quizData.forEach((q, i) => {
+            const block = document.createElement('div');
+            block.className = 'review-block';
+            const userAns = userAnswers[i];
+            const isCorrect = userAns === q.answer;
+
+            let answerHTML = isCorrect 
+                ? `<div class="review-ans correct">✓ You answered: ${userAns}</div>` 
+                : `<div class="review-ans wrong">✗ You answered: ${userAns || "Skipped"}</div>
+                   <div class="review-ans correct">✓ Correct Answer: ${q.answer}</div>`;
+
+            let insightHTML = q.explanation 
+                ? `<div class="ai-insight"><strong>AI Insight</strong>${q.explanation}</div>`
+                : `<div class="ai-insight"><strong>AI Insight</strong>Ensure your backend is configured to generate explanations to see them here!</div>`;
+
+            block.innerHTML = `<div class="review-q">${i + 1}. ${q.question}</div>${answerHTML}${insightHTML}`;
+            content.appendChild(block);
+        });
+    }
+
+    function hideReview() {
+        document.getElementById('review-container').style.display = 'none';
+        document.getElementById('result-container').style.display = 'block';
+    }
+
+    function retakeQuiz() {
+        userAnswers = new Array(quizData.length).fill(null);
+        currentIndex = 0;
+        document.getElementById('result-container').style.display = 'none';
+        document.getElementById('quiz-container').style.display = 'block';
+        renderQuestion();
+    }
+</script>
+
+</body>
+</html>
