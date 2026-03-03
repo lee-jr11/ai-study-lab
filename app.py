@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, jsonify
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from pptx import Presentation
 
 # Load the vault
 load_dotenv()
@@ -18,9 +19,18 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 def index():
     return render_template('index.html')
 
+# New Tool: Crack open the PPTX and pull out the raw text
+def extract_text_from_pptx(file_path):
+    prs = Presentation(file_path)
+    text_content = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                text_content.append(shape.text)
+    return "\n".join(text_content)
+
 @app.route('/generate', methods=['POST'])
 def generate_quiz():
-    # 1. Check if a file was actually uploaded
     if 'document' not in request.files:
         return jsonify({'error': 'No document uploaded'}), 400
         
@@ -31,19 +41,18 @@ def generate_quiz():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    # 2. Save the file temporarily so the AI can read it
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    
+    # Save the file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
         file.save(temp_file.name)
         temp_file_path = temp_file.name
 
     try:
-        # 3. Upload the document to Gemini
-        gemini_file = client.files.upload(file=temp_file_path)
-        
-        # 4. The Master Prompt - Forcing the strict JSON structure
+        # The Master Prompt
         prompt = f"""
-        You are an expert university professor. I am providing a lecture document.
-        Generate exactly {num_questions} multiple-choice questions from this document.
+        You are an expert university professor. I am providing lecture material.
+        Generate exactly {num_questions} multiple-choice questions from this material.
         The intelligence/difficulty level should be: {difficulty}.
         
         You must respond ONLY with a valid JSON object. Do not include markdown formatting or extra text.
@@ -56,24 +65,37 @@ def generate_quiz():
         - "explanation": A clear, 1-2 sentence explanation of why this answer is correct. Do not skip this.
         """
         
-        # 5. Call the engine and force a JSON response
+        contents = [prompt]
+        gemini_file = None
+        
+        # Logic Fork: Handle PPTX locally, handle PDF via Gemini API
+        if file_ext == '.pptx':
+            pptx_text = extract_text_from_pptx(temp_file_path)
+            contents.append(f"Here is the lecture text:\n\n{pptx_text}")
+        else:
+            gemini_file = client.files.upload(file=temp_file_path)
+            contents.append(gemini_file)
+
+        # Call the engine
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=[gemini_file, prompt],
+            contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
             )
         )
         
-        # 6. Parse the data and clean up the server
         quiz_data = json.loads(response.text)
-        client.files.delete(name=gemini_file.name)
         
+        # Clean up the cloud vault if it was a PDF
+        if gemini_file:
+            client.files.delete(name=gemini_file.name)
+            
         return jsonify(quiz_data)
         
     except Exception as e:
         print(f"Error generating quiz: {e}")
-        return jsonify({'error': 'The engine failed to process this document. Please try again.'}), 500
+        return jsonify({'error': 'The engine failed to process this document. It may be too large or complex.'}), 500
         
     finally:
         # Always delete the temporary file off your hard drive

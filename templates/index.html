@@ -230,7 +230,7 @@
                 <label class="file-upload-label" id="drop-zone" for="document">
                     <span id="file-name-display">Drop PDF / PPTX here or click to browse</span>
                 </label>
-                <input type="file" id="document" name="document" accept=".pdf, .pptx" required>
+                <input type="file" id="document" name="document" accept=".pdf, .pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/pdf" required>
             </div>
             
             <div class="form-group">
@@ -255,7 +255,7 @@
                     Target Output
                 </div>
                 <input type="number" id="num_questions" name="num_questions" value="10" min="1" max="30" required>
-                <p class="input-helper">target output shouldn't be greater than 30 questions
+                <p class="input-helper">target output shouldn't be greater than 30</p>
             </div>
 
             <button type="submit" class="generate-btn" id="submitBtn">GENERATE</button>
