@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lee's AI Lab</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2360a5fa'/><text x='50%' y='50%' font-family='Outfit, sans-serif' font-size='65' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>L</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -189,10 +190,18 @@
         .nav-btn.secondary:hover { border-color: var(--text-muted); box-shadow: none; transform: translateY(-2px); }
 
         /* Results Screen */
-        .result-icon { font-size: 4rem; margin-bottom: 10px; }
+        .result-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block; }
         .result-title { font-size: 2.5rem; margin: 0 0 10px 0; color: var(--text-main); }
         .result-score { font-size: 5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 20px 0; }
         .result-subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 40px; }
+
+        /* Shake Animation for bad score */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0) rotate(0); }
+            15%, 45%, 75% { transform: translateX(-8px) rotate(-5deg); }
+            30%, 60% { transform: translateX(8px) rotate(5deg); }
+        }
+        .shake-animation { animation: shake 0.6s ease-in-out; }
 
         /* Review Screen */
         .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); }
@@ -465,31 +474,36 @@
     document.getElementById('nextBtn').addEventListener('click', () => { if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); } });
     document.getElementById('prevBtn').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; renderQuestion(); } });
 
-    // Submit & Confetti Logic
+    // Animation Engines
     function fireConfetti() {
         var duration = 3000;
         var end = Date.now() + duration;
-
         (function frame() {
-            confetti({
-                particleCount: 5,
-                angle: 60,
-                spread: 55,
-                origin: { x: 0 },
-                colors: ['#60a5fa', '#10b981', '#c084fc']
-            });
-            confetti({
-                particleCount: 5,
-                angle: 120,
-                spread: 55,
-                origin: { x: 1 },
-                colors: ['#60a5fa', '#10b981', '#c084fc']
-            });
-
-            if (Date.now() < end) {
-                requestAnimationFrame(frame);
-            }
+            confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#60a5fa', '#10b981', '#c084fc'] });
+            confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#60a5fa', '#10b981', '#c084fc'] });
+            if (Date.now() < end) requestAnimationFrame(frame);
         }());
+    }
+
+    function fireAlmostThere() {
+        confetti({
+            particleCount: 50, spread: 70, origin: { y: 0.8 },
+            colors: ['#fbbf24', '#f59e0b', '#60a5fa'] // Gold and Blue burst
+        });
+    }
+
+    function fireOops() {
+        // Slow falling gray "rain"
+        confetti({
+            particleCount: 40, angle: 270, spread: 60, origin: { y: -0.1 },
+            colors: ['#475569', '#94a3b8'], gravity: 0.8, ticks: 300
+        });
+        
+        // Trigger the physical shake on the emoji
+        const emojiEl = document.getElementById('result-emoji');
+        emojiEl.classList.remove('shake-animation');
+        void emojiEl.offsetWidth; // Force CSS reflow so it restarts
+        emojiEl.classList.add('shake-animation');
     }
 
     document.getElementById('submitQuizBtn').addEventListener('click', () => {
@@ -506,8 +520,10 @@
             fireConfetti();
         } else if (percent >= 50) { 
             emoji = "📈"; title = "Almost There."; subtitle = "Good effort, but you should review these concepts."; 
+            fireAlmostThere();
         } else { 
-            emoji = "🧠"; title = "Keep Pushing.", subtitle = "Tough module. Better check the insights and try again."; 
+            emoji = "🧠"; title = "Keep Pushing."; subtitle = "Tough module. Better check the insights and try again."; 
+            fireOops();
         }
 
         document.getElementById('result-emoji').innerText = emoji;
