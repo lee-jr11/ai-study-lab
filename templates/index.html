@@ -139,6 +139,11 @@
         <form id="authForm">
             <input type="email" id="auth-email" class="auth-input" placeholder="Email Address" required>
             <input type="password" id="auth-password" class="auth-input" placeholder="Password" required>
+            
+            <div style="text-align: right; margin-bottom: 15px;">
+                <span onclick="triggerPasswordReset()" style="color: var(--theme-color); font-size: 0.85rem; cursor: pointer; font-weight: 500;">Forgot Password?</span>
+            </div>
+
             <button type="submit" class="generate-btn" id="auth-submit-btn">Sign In</button>
         </form>
 
@@ -294,6 +299,26 @@
 
     function handleLogout() {
         auth.signOut();
+    }
+    
+    function triggerPasswordReset() {
+        const email = document.getElementById('auth-email').value;
+        if (!email) {
+            showError("Please type your email address into the box first, then click forgot password.");
+            return;
+        }
+        
+        auth.sendPasswordResetEmail(email)
+            .then(() => {
+                errorBox.style.color = "var(--success)";
+                showError("Reset link sent! Check your inbox.");
+                // Reset error box color back to red after 5 seconds
+                setTimeout(() => { 
+                    errorBox.style.color = "var(--error)"; 
+                    errorBox.style.display = 'none'; 
+                }, 5000);
+            })
+            .catch((error) => showError(error.message));
     }
 
     function showError(msg) {
