@@ -297,7 +297,7 @@
         auth.sendPasswordResetEmail(email)
             .then(() => {
                 errorBox.style.color = "var(--success)";
-                showError("Reset link sent! Check your inbox.");
+                showError("Reset link sent! Kindly check your spam folder.");
                 setTimeout(() => { 
                     errorBox.style.color = "var(--error)"; 
                     errorBox.style.display = 'none'; 
