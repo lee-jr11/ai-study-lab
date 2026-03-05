@@ -167,9 +167,9 @@
         </button>
     </div>
 </div>
- 
-<div class="container" id="app-container"></div>
-<div class="header" id="main-header">
+
+<div class="container" id="app-container">
+    <div class="header" id="main-header">
         <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
         <p id="welcome-text" style="color: var(--theme-color); font-weight: 500; font-size: 1.2rem; margin-top: 5px;"></p>
     </div>
@@ -225,23 +225,25 @@
             <div id="review-content"></div>
         </div>
     </div>
-</div>
-
-<script>
+</div> <script>
     // ==========================================
-    // 1. FIREBASE CONFIGURATION (PASTE YOUR KEYS HERE)
+    // 1. FIREBASE CONFIGURATION
     // ==========================================
     const firebaseConfig = {
-  apiKey: "AIzaSyBLzvo0xYQCyfEePzzfSAi0zfDS7i0P2Fc",
-  authDomain: "lee-ai-lab.firebaseapp.com",
-  projectId: "lee-ai-lab",
-  storageBucket: "lee-ai-lab.firebasestorage.app",
-  messagingSenderId: "166368466462",
-  appId: "1:166368466462:web:3cb4e89d8f7f426a99000f"
-};
+      apiKey: "AIzaSyBLzvo0xYQCyfEePzzfSAi0zfDS7i0P2Fc",
+      authDomain: "lee-ai-lab.firebaseapp.com",
+      projectId: "lee-ai-lab",
+      storageBucket: "lee-ai-lab.firebasestorage.app",
+      messagingSenderId: "166368466462",
+      appId: "1:166368466462:web:3cb4e89d8f7f426a99000f"
+    };
 
+    // Initialize exactly ONCE to prevent VS Code errors
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
+    
+    // Force Firebase to instantly log the user out if the page refreshes
+    auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
 
     // ==========================================
     // 2. AUTHENTICATION LOGIC
@@ -252,7 +254,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const errorBox = document.getElementById('auth-error');
 
-    let currentUserName = ""; // Global memory for their name
+    let currentUserName = ""; 
 
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -260,7 +262,6 @@
             appContainer.style.display = 'block';
             logoutBtn.style.display = 'flex';
             
-            // Extract their name (grab the first word if it is a full Google name)
             let rawName = user.displayName || "Explorer";
             currentUserName = rawName.split(' ')[0];
             document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
@@ -278,13 +279,10 @@
         document.getElementById('auth-mode-toggle').innerText = isSignUpMode ? "Sign In" : "Sign Up";
         document.getElementById('auth-subtitle').innerText = isSignUpMode ? "Create a new secure account." : "Sign in to access the generator.";
         
-        // Show or hide the name fields
         const signupFields = document.getElementById('signup-fields');
         signupFields.style.display = isSignUpMode ? 'block' : 'none';
         
-        // Make names required only during sign up
         document.getElementById('auth-firstname').required = isSignUpMode;
-        
         errorBox.style.display = 'none';
     }
 
@@ -297,19 +295,15 @@
         submitBtn.disabled = true;
 
         if (isSignUpMode) {
-            // Grab the typed names
             const fName = document.getElementById('auth-firstname').value.trim();
             const nickname = document.getElementById('auth-nickname').value.trim();
-            // Prioritize nickname. If empty, use first name.
             const preferredName = nickname || fName;
 
             auth.createUserWithEmailAndPassword(email, password)
                 .then((userCredential) => {
-                    // Inject their preferred name into the hidden Firebase profile
                     return userCredential.user.updateProfile({ displayName: preferredName });
                 })
                 .then(() => {
-                    // Force the greeting to update immediately
                     currentUserName = preferredName;
                     document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
                 })
@@ -358,11 +352,9 @@
         
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
-            // Swap to an eye-slash icon when password is shown
             eyeIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />';
         } else {
             passwordInput.type = 'password';
-            // Swap back to the normal eye icon when hidden
             eyeIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
         }
     });
@@ -513,7 +505,6 @@
             fireOops(); if(fxOverlay) fxOverlay.classList.add('flash-red-fx'); if(mainContainer) mainContainer.classList.add('screen-shake'); if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]); 
         }
 
-        // THESE WERE THE MISSING LINES
         document.getElementById('result-emoji').innerText = emoji; 
         document.getElementById('result-title').innerText = title; 
         document.getElementById('result-score').innerText = `${percent}%`; 
