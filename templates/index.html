@@ -129,7 +129,14 @@
         <div class="auth-error" id="auth-error"></div>
         
         <form id="authForm">
+            <div id="signup-fields" style="display: none;">
+                <input type="text" id="auth-firstname" class="auth-input" placeholder="First Name">
+                <input type="text" id="auth-lastname" class="auth-input" placeholder="Last Name">
+                <input type="text" id="auth-nickname" class="auth-input" placeholder="Nickname (Optional)">
+            </div>
+
             <input type="email" id="auth-email" class="auth-input" placeholder="Email Address" required>
+            
             <div style="position: relative; margin-bottom: 15px;">
                 <input type="password" id="auth-password" class="auth-input" placeholder="Password" required style="margin-bottom: 0; padding-right: 45px;">
                 <span id="togglePassword" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted);">
@@ -161,9 +168,9 @@
     </div>
 </div>
 
-<div class="container" id="app-container">
-    <div class="header" id="main-header">
+<div class="header" id="main-header">
         <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
+        <p id="welcome-text" style="color: var(--theme-color); font-weight: 500; font-size: 1.2rem; margin-top: 5px;"></p>
     </div>
 
     <div class="glass-card" id="main-card">
@@ -244,11 +251,18 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const errorBox = document.getElementById('auth-error');
 
+    let currentUserName = ""; // Global memory for their name
+
     auth.onAuthStateChanged((user) => {
         if (user) {
             authContainer.style.display = 'none';
             appContainer.style.display = 'block';
             logoutBtn.style.display = 'flex';
+            
+            // Extract their name (grab the first word if it is a full Google name)
+            let rawName = user.displayName || "Explorer";
+            currentUserName = rawName.split(' ')[0];
+            document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
         } else {
             appContainer.style.display = 'none';
             authContainer.style.display = 'block';
@@ -262,6 +276,14 @@
         document.getElementById('auth-mode-text').innerText = isSignUpMode ? "Already have an account? " : "Don't have an account? ";
         document.getElementById('auth-mode-toggle').innerText = isSignUpMode ? "Sign In" : "Sign Up";
         document.getElementById('auth-subtitle').innerText = isSignUpMode ? "Create a new secure account." : "Sign in to access the generator.";
+        
+        // Show or hide the name fields
+        const signupFields = document.getElementById('signup-fields');
+        signupFields.style.display = isSignUpMode ? 'block' : 'none';
+        
+        // Make names required only during sign up
+        document.getElementById('auth-firstname').required = isSignUpMode;
+        
         errorBox.style.display = 'none';
     }
 
@@ -274,7 +296,22 @@
         submitBtn.disabled = true;
 
         if (isSignUpMode) {
+            // Grab the typed names
+            const fName = document.getElementById('auth-firstname').value.trim();
+            const nickname = document.getElementById('auth-nickname').value.trim();
+            // Prioritize nickname. If empty, use first name.
+            const preferredName = nickname || fName;
+
             auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Inject their preferred name into the hidden Firebase profile
+                    return userCredential.user.updateProfile({ displayName: preferredName });
+                })
+                .then(() => {
+                    // Force the greeting to update immediately
+                    currentUserName = preferredName;
+                    document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
+                })
                 .catch(error => showError(error.message))
                 .finally(() => resetAuthBtn());
         } else {
@@ -441,13 +478,47 @@
         }
 
         let emoji, title, subtitle;
-        if (percent >= 90) { emoji = "🏆"; title = "Outstanding!"; subtitle = "Genius level unlocked. You crushed this."; fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]); } 
-        else if (percent >= 70) { emoji = "🔥"; title = "Great Work!"; subtitle = "You have a solid grip on this material."; fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100]); } 
-        else if (percent >= 50) { emoji = "📈"; title = "Almost There."; subtitle = "Good effort, but you should review these concepts."; fireAlmostThere(); if (navigator.vibrate) navigator.vibrate([50]); } 
-        else { emoji = "🧠"; title = "Keep Pushing."; subtitle = "Tough module. Better check the insights and try again."; fireOops(); if(fxOverlay) fxOverlay.classList.add('flash-red-fx'); if(mainContainer) mainContainer.classList.add('screen-shake'); if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]); }
+        
+        if (percent >= 90) { 
+            emoji = "🏆"; 
+            const titles = ["Outstanding!", "Flawless Victory!", "Absolute Genius!"];
+            const subtitles = [`Genius level unlocked. You crushed this, ${currentUserName}.`, `Incredible work, ${currentUserName}. You barely broke a sweat.`, `Perfect execution, ${currentUserName}. Nothing gets past you.`];
+            title = titles[Math.floor(Math.random() * titles.length)];
+            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]); 
+        } 
+        else if (percent >= 70) { 
+            emoji = "🔥"; 
+            const titles = ["Great Work!", "Solid Run!", "Nicely Done!"];
+            const subtitles = [`You have a solid grip on this material, ${currentUserName}.`, `Good job, ${currentUserName}. You really know your stuff.`, `Strong performance, ${currentUserName}. Keep this momentum going.`];
+            title = titles[Math.floor(Math.random() * titles.length)];
+            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+        } 
+        else if (percent >= 50) { 
+            emoji = "🔱"; 
+            const titles = ["Almost There.", "Not Bad.", "Halfway There."];
+            const subtitles = [`Good effort, ${currentUserName}, but you should review these concepts.`, `You are getting there, ${currentUserName}. Just a few blind spots to fix.`, `Keep at it, ${currentUserName}. A quick review will push you to the top.`];
+            title = titles[Math.floor(Math.random() * titles.length)];
+            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            fireAlmostThere(); if (navigator.vibrate) navigator.vibrate([50]); 
+        } 
+        else { 
+            emoji = "🧠"; 
+            const titles = ["Keep Pushing.", "Ouch.", "Tough Break."];
+            const subtitles = [`Tough module, ${currentUserName}. Better check the insights and try again.`, `Ouch, so sorry ${currentUserName}. Don't let this stop you. Keep pushing.`, `That was a rough one, ${currentUserName}. Review the answers and bounce back.`];
+            title = titles[Math.floor(Math.random() * titles.length)];
+            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            fireOops(); if(fxOverlay) fxOverlay.classList.add('flash-red-fx'); if(mainContainer) mainContainer.classList.add('screen-shake'); if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]); 
+        }
 
-        document.getElementById('result-emoji').innerText = emoji; document.getElementById('result-title').innerText = title; document.getElementById('result-score').innerText = `${percent}%`; document.getElementById('result-subtitle').innerText = subtitle;
-        document.getElementById('quiz-container').style.display = 'none'; document.getElementById('result-container').style.display = 'block';
+        // THESE WERE THE MISSING LINES
+        document.getElementById('result-emoji').innerText = emoji; 
+        document.getElementById('result-title').innerText = title; 
+        document.getElementById('result-score').innerText = `${percent}%`; 
+        document.getElementById('result-subtitle').innerText = subtitle;
+        document.getElementById('quiz-container').style.display = 'none'; 
+        document.getElementById('result-container').style.display = 'block';
     });
 
     function showReview() {
