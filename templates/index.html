@@ -124,13 +124,16 @@
         @keyframes shakeScreen { 10%, 90% { transform: translate3d(-4px, 0, 0); } 20%, 80% { transform: translate3d(6px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-10px, 0, 0); } 40%, 60% { transform: translate3d(10px, 0, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0) rotate(0); } 15%, 45%, 75% { transform: translateX(-8px) rotate(-5deg); } 30%, 60% { transform: translateX(8px) rotate(5deg); } }
         .shake-animation { animation: shake 0.6s ease-in-out; }
-
-        /* Google Translate Widget Styling */
+         
+        /* Hidden Google Engine & Custom Lang Menu */
+        #google_translate_element { display: none !important; }
         .goog-te-banner-frame.skiptranslate { display: none !important; }
         body { top: 0px !important; }
-        #google_translate_element { display: flex; align-items: center; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 22.5px; padding: 0 10px; backdrop-filter: blur(10px); height: 45px; }
-        .goog-te-gadget { color: transparent !important; font-size: 0 !important; }
-        .goog-te-combo { background: var(--bg-base); color: var(--text-main); border: 1px solid var(--input-border); border-radius: 8px; padding: 5px; outline: none; font-family: 'Outfit', sans-serif; cursor: pointer; font-size: 0.9rem; margin: 0; }
+        .custom-lang-selector { position: relative; display: inline-block; }
+        .lang-dropdown { position: absolute; top: 55px; right: 0; background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 10px; width: 140px; box-shadow: 0 10px 30px var(--card-shadow); display: none; z-index: 1000; flex-direction: column; gap: 5px; }
+        .lang-option { padding: 10px 15px; cursor: pointer; border-radius: 8px; font-size: 0.95rem; color: var(--text-main); font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between; }
+        .lang-option:hover { background: rgba(96, 165, 250, 0.15); color: var(--theme-color); transform: translateX(5px); }
+        
         </style>
 </head>
 <body>
@@ -139,6 +142,23 @@
 
 <div class="top-controls">
     <div id="google_translate_element"></div>
+
+    <div class="custom-lang-selector">
+        <button class="icon-btn icon-only" id="langToggle" aria-label="Change Language">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+            </svg>
+        </button>
+        <div class="lang-dropdown" id="langDropdown">
+            <div class="lang-option" data-lang="en">English <span>🇬🇧</span></div>
+            <div class="lang-option" data-lang="fr">Français <span>🇫🇷</span></div>
+            <div class="lang-option" data-lang="es">Español <span>🇪🇸</span></div>
+            <div class="lang-option" data-lang="de">Deutsch <span>🇩🇪</span></div>
+            <div class="lang-option" data-lang="zh-CN">中文 <span>🇨🇳</span></div>
+            <div class="lang-option" data-lang="ar">العربية <span>🇸🇦</span></div>
+        </div>
+    </div>
+
     <button class="icon-btn" id="logoutBtn" style="display: none;" onclick="handleLogout()">Sign Out</button>
     <button class="icon-btn icon-only" id="themeToggle" aria-label="Toggle Theme">
         <svg id="themeIcon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
@@ -146,35 +166,6 @@
         </svg>
     </button>
 </div>
-
-<div class="ambient-bg"></div>
-
-<div class="container" id="auth-container">
-    <div class="header">
-        <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
-        <p id="auth-subtitle" style="color: var(--text-muted);">Sign in to access the generator.</p>
-    </div>
-    <div class="glass-card">
-        <div class="auth-error" id="auth-error"></div>
-        
-        <form id="authForm">
-            <div id="signup-fields" style="display: none;">
-                <input type="text" id="auth-firstname" class="auth-input" placeholder="First Name">
-                <input type="text" id="auth-lastname" class="auth-input" placeholder="Last Name">
-                <input type="text" id="auth-nickname" class="auth-input" placeholder="Nickname (Optional)">
-            </div>
-
-            <input type="email" id="auth-email" class="auth-input" placeholder="Email Address" required>
-            
-            <div style="position: relative; margin-bottom: 15px;">
-                <input type="password" id="auth-password" class="auth-input" placeholder="Password" required style="margin-bottom: 0; padding-right: 45px;">
-                <span id="togglePassword" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted);">
-                    <svg id="eye-icon" style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                </span>
-            </div>
             
             <div style="text-align: right; margin-bottom: 15px;">
                 <span onclick="triggerPasswordReset()" style="color: var(--theme-color); font-size: 0.85rem; cursor: pointer; font-weight: 500;">Forgot Password?</span>
@@ -422,6 +413,38 @@
         rootEl.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
         themeIcon.innerHTML = newTheme === 'dark' ? sunIcon : moonIcon;
+
+        // Custom Language Selector Logic
+    const langToggle = document.getElementById('langToggle');
+    const langDropdown = document.getElementById('langDropdown');
+
+    langToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        langDropdown.style.display = langDropdown.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    // Close dropdown if user clicks anywhere else
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-lang-selector')) {
+            langDropdown.style.display = 'none';
+        }
+    });
+
+    // Hijack Google Translate
+    document.querySelectorAll('.lang-option').forEach(option => {
+        option.addEventListener('click', function() {
+            const langCode = this.getAttribute('data-lang');
+            const select = document.querySelector('.goog-te-combo');
+            
+            if (select) {
+                select.value = langCode;
+                // Force the Google engine to register the change
+                select.dispatchEvent(new Event('change')); 
+            }
+            langDropdown.style.display = 'none';
+        });
+    });
+    
     });
 
     const root = document.documentElement;
