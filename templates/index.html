@@ -7,7 +7,22 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2360a5fa'/><text x='50%' y='50%' font-family='Outfit, sans-serif' font-size='65' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>L</text></svg>">
     
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQYZRZN1LZ"></script>
+
+    <script type="text/javascript">
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+            pageLanguage: 'en', 
+            layout: google.translate.TranslateElement.InlineLayout.SIMPLE, 
+            autoDisplay: false
+        }, 'google_translate_element');
+    }
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
     <script>
+
+    
+
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
@@ -109,13 +124,21 @@
         @keyframes shakeScreen { 10%, 90% { transform: translate3d(-4px, 0, 0); } 20%, 80% { transform: translate3d(6px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-10px, 0, 0); } 40%, 60% { transform: translate3d(10px, 0, 0); } }
         @keyframes shake { 0%, 100% { transform: translateX(0) rotate(0); } 15%, 45%, 75% { transform: translateX(-8px) rotate(-5deg); } 30%, 60% { transform: translateX(8px) rotate(5deg); } }
         .shake-animation { animation: shake 0.6s ease-in-out; }
-    </style>
+
+        /* Google Translate Widget Styling */
+        .goog-te-banner-frame.skiptranslate { display: none !important; }
+        body { top: 0px !important; }
+        #google_translate_element { display: flex; align-items: center; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 22.5px; padding: 0 10px; backdrop-filter: blur(10px); height: 45px; }
+        .goog-te-gadget { color: transparent !important; font-size: 0 !important; }
+        .goog-te-combo { background: var(--bg-base); color: var(--text-main); border: 1px solid var(--input-border); border-radius: 8px; padding: 5px; outline: none; font-family: 'Outfit', sans-serif; cursor: pointer; font-size: 0.9rem; margin: 0; }
+        </style>
 </head>
 <body>
 
 <div id="fx-overlay"></div>
 
 <div class="top-controls">
+    <div id="google_translate_element"></div>
     <button class="icon-btn" id="logoutBtn" style="display: none;" onclick="handleLogout()">Sign Out</button>
     <button class="icon-btn icon-only" id="themeToggle" aria-label="Toggle Theme">
         <svg id="themeIcon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
