@@ -41,7 +41,6 @@
 
         body, html { margin: 0; padding: 0; font-family: 'Outfit', sans-serif; color: var(--text-main); min-height: 100vh; overflow-x: hidden; background-color: var(--bg-base); transition: background-color 0.5s ease, color 0.5s ease; }
         
-        /* Utility Buttons (Theme & Logout) */
         .top-controls { position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; }
         .icon-btn { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-main); height: 45px; padding: 0 15px; border-radius: 22.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); transition: all 0.3s ease; box-shadow: 0 4px 15px var(--card-shadow); font-family: 'Outfit', sans-serif; font-weight: 500; }
         .icon-btn:hover { border-color: var(--theme-color); transform: translateY(-2px); }
@@ -52,9 +51,8 @@
 
         .container { width: 100%; max-width: 650px; margin: 60px auto; perspective: 1000px; position: relative; z-index: 10; }
         
-        /* App Sections */
-        #auth-container { display: block; } /* Shows by default until Firebase checks keys */
-        #app-container { display: none; } /* Hidden until logged in */
+        #auth-container { display: block; } 
+        #app-container { display: none; } 
 
         .header { text-align: center; margin-bottom: 40px; pointer-events: none; }
         .header h1 { font-size: 3.5rem; margin: 0 0 5px 0; font-weight: 700; letter-spacing: -1px; color: var(--text-main); }
@@ -62,17 +60,13 @@
 
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 40px; box-shadow: 0 25px 50px -12px var(--card-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.1); transform-style: preserve-3d; }
 
-        /* Auth Styles */
         .auth-input { width: 100%; padding: 15px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px; color: var(--text-main); font-size: 1.1rem; font-family: inherit; box-sizing: border-box; outline: none; margin-bottom: 15px; transition: border-color 0.3s ease; }
         .auth-input:focus { border-color: var(--theme-color); }
         .auth-divider { display: flex; align-items: center; text-align: center; margin: 20px 0; color: var(--text-muted); font-size: 0.9rem; }
         .auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--input-border); }
         .auth-divider::before { margin-right: .5em; } .auth-divider::after { margin-left: .5em; }
-        .auth-switch { text-align: center; margin-top: 20px; color: var(--text-muted); font-size: 0.95rem; }
-        .auth-switch span { color: var(--theme-color); cursor: pointer; font-weight: 700; }
         .auth-error { color: var(--error); text-align: center; margin-bottom: 15px; font-size: 0.9rem; display: none; }
 
-        /* Form Styles */
         .form-group { margin-bottom: 30px; transform: translateZ(20px); }
         .label-wrap { display: flex; align-items: center; margin-bottom: 12px; font-weight: 500; color: var(--text-muted); }
         .label-wrap svg { width: 18px; height: 18px; margin-right: 8px; stroke: var(--theme-color); }
@@ -80,7 +74,6 @@
         .file-upload-label { display: flex; align-items: center; justify-content: center; width: 100%; padding: 30px; background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px; color: var(--text-muted); cursor: pointer; box-sizing: border-box; font-size: 1.05rem; }
         .file-upload-label:hover { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); }
 
-        /* Slider */
         .slider-container { position: relative; width: 100%; padding: 10px 0; }
         input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; outline: none; }
         input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; }
@@ -99,7 +92,6 @@
         button.google-btn { background: white; color: #444; border: 1px solid #ccc; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px; }
         button.google-btn:hover { background: #f8f8f8; box-shadow: 0 0 15px rgba(255,255,255,0.2); transform: scale(1.02); }
 
-        /* Extracted UI bits omitted for brevity (Quiz UI, Review UI, FX identical to last version) */
         #quiz-container, #result-container, #review-container { display: none; }
         .progress-wrapper { margin-bottom: 30px; } .progress-bar-bg { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; overflow: hidden; } .progress-fill { height: 100%; background: var(--theme-color); width: 0%; transition: width 0.4s ease; } .progress-text { margin-top: 10px; font-size: 0.9rem; color: var(--text-muted); font-weight: 500; display: flex; justify-content: space-between; } .question-text { font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; font-weight: 500;} .option-btn { display: flex; align-items: center; width: 100%; text-align: left; background: var(--option-bg); border: 1px solid var(--option-border); color: var(--text-main); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; cursor: pointer; font-size: 1.05rem; transition: all 0.2s ease; } .option-label { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; background: var(--input-bg); border: 1px solid var(--option-border); border-radius: 8px; margin-right: 15px; font-weight: 700; font-size: 1rem; color: var(--text-muted); } .option-btn.selected { border-color: var(--theme-color); box-shadow: 0 0 15px rgba(96, 165, 250, 0.2); transform: translateX(5px); } .option-btn.selected .option-label { background: var(--theme-color); color: var(--bg-base); border-color: var(--theme-color); } .nav-buttons { display: flex; gap: 15px; margin-top: 30px; } .nav-btn { flex: 1; } .nav-btn.secondary { background: var(--input-bg); color: var(--text-main); box-shadow: none; border: 1px solid var(--option-border); } .result-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block; } .result-title { font-size: 2.5rem; margin: 0 0 10px 0; color: var(--text-main); } .result-score { font-size: 5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 20px 0; } .result-subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 40px; } .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); } .review-block { background: var(--question-bg); padding: 25px; border-radius: 16px; border: 1px solid var(--option-border); margin-bottom: 20px; text-align: left; } .review-q { font-size: 1.15rem; font-weight: 500; margin-bottom: 15px; color: var(--text-main); line-height: 1.5; } .review-ans { font-size: 1rem; margin-bottom: 8px; padding: 12px 15px; border-radius: 8px; font-weight: 500;} .review-ans.correct { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); } .review-ans.wrong { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); } .ai-insight { background: rgba(96, 165, 250, 0.05); border-left: 4px solid var(--theme-color); padding: 15px 20px; margin-top: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; } .ai-insight strong { color: var(--theme-color); font-weight: 600; display: block; margin-bottom: 5px;}
         
@@ -131,7 +123,7 @@
 <div class="container" id="auth-container">
     <div class="header">
         <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
-        <p style="color: var(--text-muted);">Sign in to access the generator.</p>
+        <p id="auth-subtitle" style="color: var(--text-muted);">Sign in to access the generator.</p>
     </div>
     <div class="glass-card">
         <div class="auth-error" id="auth-error"></div>
@@ -147,9 +139,9 @@
             <button type="submit" class="generate-btn" id="auth-submit-btn">Sign In</button>
         </form>
 
-        <div class="auth-switch">
-            <span id="auth-mode-text">Don't have an account? </span>
-            <span id="auth-mode-toggle" onclick="toggleAuthMode()">Sign Up</span>
+        <div class="auth-switch" onclick="toggleAuthMode()" style="cursor: pointer; margin-top: 20px; text-align: center;">
+            <span id="auth-mode-text" style="color: var(--text-muted); font-size: 0.95rem;">Don't have an account? </span>
+            <span id="auth-mode-toggle" style="color: var(--theme-color); font-weight: 700; font-size: 0.95rem;">Sign Up</span>
         </div>
 
         <div class="auth-divider">OR</div>
@@ -221,10 +213,8 @@
 
 <script>
     // ==========================================
-    // 1. FIREBASE CONFIGURATION (PASTE HERE)
+    // 1. FIREBASE CONFIGURATION (PASTE YOUR KEYS HERE)
     // ==========================================
-    // Delete the placeholder code below and paste your exact firebaseConfig block here!
-    
     const firebaseConfig = {
   apiKey: "AIzaSyBLzvo0xYQCyfEePzzfSAi0zfDS7i0P2Fc",
   authDomain: "lee-ai-lab.firebaseapp.com",
@@ -234,7 +224,6 @@
   appId: "1:166368466462:web:3cb4e89d8f7f426a99000f"
 };
 
-    // Initialize Firebase Engine
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
@@ -247,31 +236,27 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const errorBox = document.getElementById('auth-error');
 
-    // The Master Keycard Reader - Watches if user is logged in
     auth.onAuthStateChanged((user) => {
         if (user) {
-            // Door Opens
             authContainer.style.display = 'none';
             appContainer.style.display = 'block';
             logoutBtn.style.display = 'flex';
         } else {
-            // Door Closes
             appContainer.style.display = 'none';
             authContainer.style.display = 'block';
             logoutBtn.style.display = 'none';
         }
     });
 
-    // Toggle between Login and Create Account
     function toggleAuthMode() {
         isSignUpMode = !isSignUpMode;
         document.getElementById('auth-submit-btn').innerText = isSignUpMode ? "Create Account" : "Sign In";
         document.getElementById('auth-mode-text').innerText = isSignUpMode ? "Already have an account? " : "Don't have an account? ";
         document.getElementById('auth-mode-toggle').innerText = isSignUpMode ? "Sign In" : "Sign Up";
+        document.getElementById('auth-subtitle').innerText = isSignUpMode ? "Create a new secure account." : "Sign in to access the generator.";
         errorBox.style.display = 'none';
     }
 
-    // Handle Email/Password Form
     document.getElementById('authForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const email = document.getElementById('auth-email').value;
@@ -291,16 +276,17 @@
         }
     });
 
-    // Handle Google Popup Login
     function handleGoogleLogin() {
         const provider = new firebase.auth.GoogleAuthProvider();
         auth.signInWithPopup(provider).catch(error => showError(error.message));
     }
 
     function handleLogout() {
-        auth.signOut();
+        if (window.confirm("Are you sure you want to sign out?")) {
+            auth.signOut();
+        }
     }
-    
+
     function triggerPasswordReset() {
         const email = document.getElementById('auth-email').value;
         if (!email) {
@@ -312,7 +298,6 @@
             .then(() => {
                 errorBox.style.color = "var(--success)";
                 showError("Reset link sent! Check your inbox.");
-                // Reset error box color back to red after 5 seconds
                 setTimeout(() => { 
                     errorBox.style.color = "var(--error)"; 
                     errorBox.style.display = 'none'; 
@@ -333,7 +318,7 @@
     }
 
     // ==========================================
-    // 3. UI & APP LOGIC (Unchanged)
+    // 3. UI & APP LOGIC
     // ==========================================
     const themeToggle = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
