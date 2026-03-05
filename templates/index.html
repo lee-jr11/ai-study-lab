@@ -123,7 +123,7 @@
         .shake-animation { animation: shake 0.6s ease-in-out; }
          
         /* Hidden Google Engine & Custom Lang Menu */
-        #google_translate_element { display: none !important; }
+        #google_translate_element { position: absolute; left: -9999px; opacity: 0; pointer-events: none; }
         .goog-te-banner-frame.skiptranslate { display: none !important; }
         body { top: 0px !important; }
         .custom-lang-selector { position: relative; display: inline-block; }
@@ -465,8 +465,12 @@
             
             if (select) {
                 select.value = langCode;
-                // Force the Google engine to register the change
-                select.dispatchEvent(new Event('change')); 
+                // 'bubbles: true' forces Google's hidden listeners to hear the change
+                select.dispatchEvent(new Event('change', { bubbles: true, cancelable: true })); 
+            } else {
+                // Bulletproof fallback: force the translation cookie and reload
+                document.cookie = `googtrans=/en/${langCode}; path=/;`;
+                window.location.reload();
             }
             langDropdown.style.display = 'none';
         });
