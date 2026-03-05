@@ -92,7 +92,13 @@
         button.google-btn { background: white; color: #444; border: 1px solid #ccc; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px; }
         button.google-btn:hover { background: #f8f8f8; box-shadow: 0 0 15px rgba(255,255,255,0.2); transform: scale(1.02); }
 
-        #quiz-container, #result-container, #review-container { display: none; }
+        /* Loader Styles */
+        .loader-spinner { width: 50px; height: 50px; border: 4px solid var(--input-border); border-top-color: var(--theme-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pulse-text { animation: pulseOpacity 1.5s ease-in-out infinite; }
+        @keyframes pulseOpacity { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        #quiz-container, #result-container, #review-container, #loading-screen { display: none; }
         .progress-wrapper { margin-bottom: 30px; } .progress-bar-bg { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; overflow: hidden; } .progress-fill { height: 100%; background: var(--theme-color); width: 0%; transition: width 0.4s ease; } .progress-text { margin-top: 10px; font-size: 0.9rem; color: var(--text-muted); font-weight: 500; display: flex; justify-content: space-between; } .question-text { font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; font-weight: 500;} .option-btn { display: flex; align-items: center; width: 100%; text-align: left; background: var(--option-bg); border: 1px solid var(--option-border); color: var(--text-main); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; cursor: pointer; font-size: 1.05rem; transition: all 0.2s ease; } .option-label { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; background: var(--input-bg); border: 1px solid var(--option-border); border-radius: 8px; margin-right: 15px; font-weight: 700; font-size: 1rem; color: var(--text-muted); } .option-btn.selected { border-color: var(--theme-color); box-shadow: 0 0 15px rgba(96, 165, 250, 0.2); transform: translateX(5px); } .option-btn.selected .option-label { background: var(--theme-color); color: var(--bg-base); border-color: var(--theme-color); } .nav-buttons { display: flex; gap: 15px; margin-top: 30px; } .nav-btn { flex: 1; } .nav-btn.secondary { background: var(--input-bg); color: var(--text-main); box-shadow: none; border: 1px solid var(--option-border); } .result-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block; } .result-title { font-size: 2.5rem; margin: 0 0 10px 0; color: var(--text-main); } .result-score { font-size: 5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 20px 0; } .result-subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 40px; } .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); } .review-block { background: var(--question-bg); padding: 25px; border-radius: 16px; border: 1px solid var(--option-border); margin-bottom: 20px; text-align: left; } .review-q { font-size: 1.15rem; font-weight: 500; margin-bottom: 15px; color: var(--text-main); line-height: 1.5; } .review-ans { font-size: 1rem; margin-bottom: 8px; padding: 12px 15px; border-radius: 8px; font-weight: 500;} .review-ans.correct { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); } .review-ans.wrong { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); } .ai-insight { background: rgba(96, 165, 250, 0.05); border-left: 4px solid var(--theme-color); padding: 15px 20px; margin-top: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; } .ai-insight strong { color: var(--theme-color); font-weight: 600; display: block; margin-bottom: 5px;}
         
         #fx-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; opacity: 0; transition: opacity 0.3s; }
@@ -200,6 +206,12 @@
             <p class="tagline" style="text-align: center; margin-top: 15px; color: var(--text-muted); font-size: 0.95rem;">Build smarter exams in seconds.</p>
         </form>
 
+        <div id="loading-screen" style="text-align: center; padding: 40px 20px;">
+            <div class="loader-spinner"></div>
+            <h2 id="loading-title" class="pulse-text" style="color: var(--text-main); margin-top: 25px; font-size: 1.8rem; font-weight: 700;">Analyzing Module...</h2>
+            <p id="loading-subtitle" style="color: var(--text-muted); font-size: 1.1rem;">Extracting key concepts and data points.</p>
+        </div>
+
         <div id="quiz-container">
             <div class="progress-wrapper"><div class="progress-bar-bg"><div class="progress-fill" id="progress-fill"></div></div><div class="progress-text"><span id="progress-count"></span><span id="progress-percent"></span></div></div>
             <div id="active-question-area"><div class="question-text" id="q-text">Loading...</div><div id="q-options"></div></div>
@@ -225,7 +237,9 @@
             <div id="review-content"></div>
         </div>
     </div>
-</div> <script>
+</div>
+
+<script>
     // ==========================================
     // 1. FIREBASE CONFIGURATION
     // ==========================================
@@ -238,11 +252,8 @@
       appId: "1:166368466462:web:3cb4e89d8f7f426a99000f"
     };
 
-    // Initialize exactly ONCE to prevent VS Code errors
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    
-    // Force Firebase to instantly log the user out if the page refreshes
     auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
 
     // ==========================================
@@ -414,19 +425,56 @@
     });
 
     let quizData = []; let userAnswers = []; let currentIndex = 0;
+    
+    // NEW LOADING SCREEN LOGIC
+    let loadingInterval;
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingTitle = document.getElementById('loading-title');
+    const loadingSubtitle = document.getElementById('loading-subtitle');
+    const loadingPhrases = [
+        { title: "Analyzing Module...", sub: "Extracting key concepts and data points." },
+        { title: "Formulating Questions...", sub: "Aligning with your selected intelligence level." },
+        { title: "Calibrating Difficulty...", sub: "Ensuring the perfect challenge." },
+        { title: "Finalizing Output...", sub: "Polishing the quiz engine." }
+    ];
 
     document.getElementById('quizForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        document.getElementById('submitBtn').innerText = "GENERATING...";
+        
+        // Hide the form and show the loading screen
+        e.target.style.display = 'none';
+        loadingScreen.style.display = 'block';
+
+        // Start cycling the loading text
+        let phraseIndex = 0;
+        loadingTitle.innerText = loadingPhrases[phraseIndex].title;
+        loadingSubtitle.innerText = loadingPhrases[phraseIndex].sub;
+
+        loadingInterval = setInterval(() => {
+            phraseIndex = (phraseIndex + 1) % loadingPhrases.length;
+            loadingTitle.innerText = loadingPhrases[phraseIndex].title;
+            loadingSubtitle.innerText = loadingPhrases[phraseIndex].sub;
+        }, 2500);
+
         try {
             const response = await fetch('/generate', { method: 'POST', body: new FormData(e.target) });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
+            
+            // Stop the loader and show the quiz
+            clearInterval(loadingInterval);
+            loadingScreen.style.display = 'none';
+            
             quizData = data.quiz; userAnswers = new Array(quizData.length).fill(null); currentIndex = 0;
-            e.target.style.display = 'none';
             document.getElementById('quiz-container').style.display = 'block';
             renderQuestion();
-        } catch (error) { alert('Error: ' + error.message); document.getElementById('submitBtn').innerText = "GENERATE"; }
+        } catch (error) { 
+            // Stop the loader, show the form again, and throw the error
+            clearInterval(loadingInterval);
+            loadingScreen.style.display = 'none';
+            e.target.style.display = 'block';
+            alert('Error: ' + error.message); 
+        }
     });
 
     function renderQuestion() {
