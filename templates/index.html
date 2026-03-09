@@ -72,6 +72,16 @@
 
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 40px; box-shadow: 0 25px 50px -12px var(--card-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.1); transform-style: preserve-3d; }
 
+        /* Dashboard Styles */
+        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 10px; }
+        @media (max-width: 600px) { .dash-grid { grid-template-columns: 1fr; } }
+        .dash-card { background: var(--input-bg); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; text-align: left; display: flex; flex-direction: column; gap: 12px; }
+        .dash-card:hover { border-color: var(--theme-color); box-shadow: 0 10px 30px rgba(96, 165, 250, 0.1); transform: translateY(-3px); }
+        .dash-icon { font-size: 1.8rem; background: rgba(255,255,255,0.03); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid var(--option-border); color: var(--theme-color); }
+        .dash-card h3 { margin: 0; font-size: 1.25rem; color: var(--text-main); font-weight: 700; }
+        .dash-card p { margin: 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.4; }
+        #tool-view { display: none; }
+
         .auth-input { width: 100%; padding: 15px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px; color: var(--text-main); font-size: 1.1rem; font-family: inherit; box-sizing: border-box; outline: none; margin-bottom: 15px; transition: border-color 0.3s ease; }
         .auth-input:focus { border-color: var(--theme-color); }
         .auth-divider { display: flex; align-items: center; text-align: center; margin: 20px 0; color: var(--text-muted); font-size: 0.9rem; }
@@ -83,7 +93,7 @@
         .label-wrap { display: flex; align-items: center; margin-bottom: 12px; font-weight: 500; color: var(--text-muted); }
         .label-wrap svg { width: 18px; height: 18px; margin-right: 8px; stroke: var(--theme-color); }
         input[type="file"] { display: none; }
-        .file-upload-label { display: flex; align-items: center; justify-content: center; width: 100%; padding: 30px; background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px; color: var(--text-muted); cursor: pointer; box-sizing: border-box; font-size: 1.05rem; }
+        .file-upload-label { display: flex; align-items: center; justify-content: center; width: 100%; padding: 30px; background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px; color: var(--text-muted); cursor: pointer; box-sizing: border-box; font-size: 1.05rem; text-align: center; padding: 40px 20px;}
         .file-upload-label:hover { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); }
 
         .slider-container { position: relative; width: 100%; padding: 10px 0; }
@@ -220,8 +230,28 @@
         <p id="welcome-text" style="color: var(--theme-color); font-weight: 500; font-size: 1.2rem; margin-top: 5px;"></p>
     </div>
 
-    <div class="glass-card" id="main-card">
+    <div id="dashboard-view">
+        <div class="dash-grid">
+            <div class="dash-card" onclick="openTool('quiz')">
+                <div class="dash-icon">📋</div>
+                <h3>Quiz Generator</h3>
+                <p>Practice questions on any topic</p>
+            </div>
+            <div class="dash-card" onclick="openTool('flashcard')">
+                <div class="dash-icon">📚</div>
+                <h3>Flashcard Generator</h3>
+                <p>Create study flashcards instantly</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card" id="tool-view">
+        <button class="generate-btn ghost-btn" style="width: auto; padding: 8px 15px; margin-bottom: 25px; font-size: 0.9rem;" onclick="closeTool()">← Back to Dashboard</button>
+        <h2 id="tool-title" style="margin-top: 0; margin-bottom: 25px; text-align: center; color: var(--text-main);">Quiz Generator</h2>
+        
         <form id="quizForm">
+            <input type="hidden" id="generation-mode" name="mode" value="quiz">
+            
             <div class="form-group">
                 <div class="label-wrap"><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>Upload Module</div>
                 <label class="file-upload-label" id="drop-zone" for="document"><span id="file-name-display">Drop PDF / PPTX here or click to browse</span></label>
@@ -239,12 +269,11 @@
             </div>
 
             <div class="form-group">
-                <div class="label-wrap"><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Target Output</div>
+                <div class="label-wrap" id="target-output-label"><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Target Output</div>
                 <input type="number" id="num_questions" name="num_questions" value="10" min="1" max="30" required>
                 <p class="input-helper">target output shouldn't be greater than 30</p>
             </div>
-            <button type="submit" class="generate-btn" id="submitBtn">GENERATE</button>
-            <p class="tagline" style="text-align: center; margin-top: 15px; color: var(--text-muted); font-size: 0.95rem;">Build smarter exams in seconds.</p>
+            <button type="submit" class="generate-btn" id="submitBtn">GENERATE QUIZ</button>
         </form>
 
         <div id="loading-screen" style="text-align: center; padding: 40px 20px;">
@@ -270,7 +299,7 @@
             <p class="result-subtitle" id="result-subtitle"></p>
             <button class="generate-btn" onclick="retakeQuiz()">Retake This Test</button>
             <button class="generate-btn ghost-btn" style="margin-top: 15px;" onclick="showReview()">Review Answers & Insights</button>
-            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">Upload New Module</button>
+            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">Back to Dashboard</button>
         </div>
 
         <div id="review-container">
@@ -442,7 +471,6 @@
         themeIcon.innerHTML = newTheme === 'dark' ? sunIcon : moonIcon;
     });
 
-    // Custom Language Selector Logic (Moved OUTSIDE the theme toggle listener!)
     const langToggle = document.getElementById('langToggle');
     const langDropdown = document.getElementById('langDropdown');
 
@@ -451,14 +479,12 @@
         langDropdown.style.display = langDropdown.style.display === 'flex' ? 'none' : 'flex';
     });
 
-    // Close dropdown if user clicks anywhere else
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.custom-lang-selector')) {
             langDropdown.style.display = 'none';
         }
     });
 
-    // Hijack Google Translate
     document.querySelectorAll('.lang-option').forEach(option => {
         option.addEventListener('click', function() {
             const langCode = this.getAttribute('data-lang');
@@ -466,16 +492,35 @@
             
             if (select) {
                 select.value = langCode;
-                // 'bubbles: true' forces Google's hidden listeners to hear the change
                 select.dispatchEvent(new Event('change', { bubbles: true, cancelable: true })); 
             } else {
-                // Bulletproof fallback: force the translation cookie and reload
                 document.cookie = `googtrans=/en/${langCode}; path=/;`;
                 window.location.reload();
             }
             langDropdown.style.display = 'none';
         });
     });
+
+    // Dashboard Tool Switching Logic
+    function openTool(mode) {
+        document.getElementById('dashboard-view').style.display = 'none';
+        document.getElementById('tool-view').style.display = 'block';
+        document.getElementById('generation-mode').value = mode;
+        
+        const isQuiz = mode === 'quiz';
+        document.getElementById('tool-title').innerText = isQuiz ? 'Quiz Generator' : 'Flashcard Generator';
+        document.getElementById('submitBtn').innerText = isQuiz ? 'GENERATE QUIZ' : 'GENERATE FLASHCARDS';
+        
+        const targetOutputLabel = document.getElementById('target-output-label');
+        targetOutputLabel.innerHTML = isQuiz 
+            ? '<svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Target Output'
+            : '<svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75h1.5m9 0h-9" /></svg>Number of Flashcards';
+    }
+
+    function closeTool() {
+        document.getElementById('tool-view').style.display = 'none';
+        document.getElementById('dashboard-view').style.display = 'block';
+    }
 
     const root = document.documentElement;
     const slider = document.getElementById('difficulty-slider');
@@ -492,8 +537,20 @@
 
     const fileInput = document.getElementById('document');
     fileInput.addEventListener('change', function(e) {
-        if (e.target.files[0]?.name) {
-            document.getElementById('file-name-display').innerText = e.target.files[0].name;
+        const file = e.target.files[0];
+        if (file) {
+            const maxSize = 10 * 1024 * 1024; 
+            
+            if (file.size > maxSize) {
+                alert("File is too large! Please upload a module smaller than 10MB.");
+                fileInput.value = ""; 
+                document.getElementById('file-name-display').innerText = "Drop PDF / PPTX here or click to browse";
+                document.getElementById('drop-zone').style.borderColor = "var(--error)";
+                document.getElementById('drop-zone').style.color = "var(--error)";
+                return; 
+            }
+
+            document.getElementById('file-name-display').innerText = file.name;
             document.getElementById('drop-zone').style.borderColor = "var(--theme-color)";
             document.getElementById('drop-zone').style.color = "var(--theme-color)";
             document.getElementById('drop-zone').style.borderStyle = "solid";
@@ -502,26 +559,24 @@
 
     let quizData = []; let userAnswers = []; let currentIndex = 0;
     
-    // NEW LOADING SCREEN LOGIC
     let loadingInterval;
     const loadingScreen = document.getElementById('loading-screen');
     const loadingTitle = document.getElementById('loading-title');
     const loadingSubtitle = document.getElementById('loading-subtitle');
     const loadingPhrases = [
         { title: "Analyzing Module...", sub: "Extracting key concepts and data points." },
-        { title: "Formulating Questions...", sub: "Aligning with your selected intelligence level." },
+        { title: "Formulating Content...", sub: "Aligning with your selected intelligence level." },
         { title: "Calibrating Difficulty...", sub: "Ensuring the perfect challenge." },
-        { title: "Finalizing Output...", sub: "Polishing the quiz engine." }
+        { title: "Finalizing Output...", sub: "Polishing the engine." }
     ];
 
     document.getElementById('quizForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // Hide the form and show the loading screen
         e.target.style.display = 'none';
         loadingScreen.style.display = 'block';
+        document.querySelector('.ghost-btn').style.display = 'none'; // Hide the back button while loading
 
-        // Start cycling the loading text
         let phraseIndex = 0;
         loadingTitle.innerText = loadingPhrases[phraseIndex].title;
         loadingSubtitle.innerText = loadingPhrases[phraseIndex].sub;
@@ -537,18 +592,27 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
             
-            // Stop the loader and show the quiz
             clearInterval(loadingInterval);
             loadingScreen.style.display = 'none';
+            document.querySelector('.ghost-btn').style.display = 'inline-block';
             
-            quizData = data.quiz; userAnswers = new Array(quizData.length).fill(null); currentIndex = 0;
-            document.getElementById('quiz-container').style.display = 'block';
-            renderQuestion();
+            const currentMode = document.getElementById('generation-mode').value;
+            
+            if (currentMode === 'quiz') {
+                quizData = data.quiz; userAnswers = new Array(quizData.length).fill(null); currentIndex = 0;
+                document.getElementById('quiz-container').style.display = 'block';
+                renderQuestion();
+            } else {
+                // Temporary alert until we build the Flashcard UI in Stage 2
+                alert("Flashcard logic successfully triggered! We will build the UI next.");
+                e.target.style.display = 'block';
+            }
+            
         } catch (error) { 
-            // Stop the loader, show the form again, and throw the error
             clearInterval(loadingInterval);
             loadingScreen.style.display = 'none';
             e.target.style.display = 'block';
+            document.querySelector('.ghost-btn').style.display = 'inline-block';
             alert('Error: ' + error.message); 
         }
     });
@@ -588,7 +652,7 @@
     document.getElementById('submitQuizBtn').addEventListener('click', () => {
         let score = 0; quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
         const percent = Math.round((score / quizData.length) * 100);
-        const fxOverlay = document.getElementById('fx-overlay'); const mainContainer = document.getElementById('main-container');
+        const fxOverlay = document.getElementById('fx-overlay'); const mainContainer = document.getElementById('tool-view');
         if (fxOverlay && mainContainer) {
             fxOverlay.className = ''; mainContainer.classList.remove('screen-shake');
             void fxOverlay.offsetWidth; void mainContainer.offsetWidth;
