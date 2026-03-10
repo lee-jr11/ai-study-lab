@@ -612,7 +612,7 @@
         
         e.target.style.display = 'none';
         loadingScreen.style.display = 'block';
-        document.querySelector('.ghost-btn').style.display = 'none'; // Hide back button while loading
+        document.querySelector('.ghost-btn').style.display = 'none'; 
 
         let phraseIndex = 0;
         loadingTitle.innerText = loadingPhrases[phraseIndex].title;
@@ -625,7 +625,20 @@
         }, 2500);
 
         try {
-            const response = await fetch('/generate', { method: 'POST', body: new FormData(e.target) });
+            // --- APPLE SAFARI BUG FIX ---
+            // iOS crashes if filenames have parentheses or weird symbols.
+            // We intercept the form and rename the file safely before sending.
+            const fileInput = document.getElementById('document');
+            const file = fileInput.files[0];
+            const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.pdf';
+            
+            const safeFormData = new FormData();
+            safeFormData.append('document', file, 'safe_upload' + ext);
+            safeFormData.append('difficulty', document.getElementById('difficulty-hidden').value);
+            safeFormData.append('num_questions', document.getElementById('num_questions').value);
+            safeFormData.append('mode', document.getElementById('generation-mode').value);
+
+            const response = await fetch('/generate', { method: 'POST', body: safeFormData });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
             
