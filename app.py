@@ -37,6 +37,7 @@ def generate_quiz():
     file = request.files['document']
     difficulty = request.form.get('difficulty', 'medium')
     num_questions = request.form.get('num_questions', 10)
+    mode = request.form.get('mode', 'quiz') # <-- Catches the hidden mode switch
 
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -49,21 +50,35 @@ def generate_quiz():
         temp_file_path = temp_file.name
 
     try:
-        # The Master Prompt
-        prompt = f"""
-        You are an expert university professor. I am providing lecture material.
-        Generate exactly {num_questions} multiple-choice questions from this material.
-        The intelligence/difficulty level should be: {difficulty}.
-        
-        You must respond ONLY with a valid JSON object. Do not include markdown formatting or extra text.
-        The JSON object must contain a single key called "quiz" which holds an array of question objects.
-        
-        Each object in the array MUST have exactly these four keys:
-        - "question": The actual question text.
-        - "options": An array of exactly 4 possible answers.
-        - "answer": The exact string of the correct option (must perfectly match one of the options).
-        - "explanation": A clear, 1-2 sentence explanation of why this answer is correct. Do not skip this.
-        """
+        # THE FORK IN THE ROAD
+        if mode == 'flashcard':
+            prompt = f"""
+            You are an expert tutor. I will provide a document.
+            Create exactly {num_questions} flashcards from this text.
+            The difficulty level should be {difficulty}.
+            
+            You MUST respond ONLY with a valid JSON object. Do not include markdown formatting.
+            The JSON object must contain a single key called "quiz" which holds an array of flashcard objects.
+            
+            Each object in the array MUST have exactly these two keys:
+            - "term": "The key concept or vocabulary word"
+            - "definition": "A clear, concise definition or explanation"
+            """
+        else:
+            prompt = f"""
+            You are an expert university professor. I am providing lecture material.
+            Generate exactly {num_questions} multiple-choice questions from this material.
+            The intelligence/difficulty level should be: {difficulty}.
+            
+            You must respond ONLY with a valid JSON object. Do not include markdown formatting or extra text.
+            The JSON object must contain a single key called "quiz" which holds an array of question objects.
+            
+            Each object in the array MUST have exactly these four keys:
+            - "question": The actual question text.
+            - "options": An array of exactly 4 possible answers.
+            - "answer": The exact string of the correct option (must perfectly match one of the options).
+            - "explanation": A clear, 1-2 sentence explanation of why this answer is correct. Do not skip this.
+            """
         
         contents = [prompt]
         gemini_file = None
@@ -94,7 +109,7 @@ def generate_quiz():
         return jsonify(quiz_data)
         
     except Exception as e:
-        print(f"Error generating quiz: {e}")
+        print(f"Error generating content: {e}")
         return jsonify({'error': 'The engine failed to process this document. It may be too large or complex.'}), 500
         
     finally:
