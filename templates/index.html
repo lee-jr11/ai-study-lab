@@ -93,7 +93,7 @@
         .label-wrap { display: flex; align-items: center; margin-bottom: 12px; font-weight: 500; color: var(--text-muted); }
         .label-wrap svg { width: 18px; height: 18px; margin-right: 8px; stroke: var(--theme-color); }
         input[type="file"] { display: none; }
-        .file-upload-label { display: flex; align-items: center; justify-content: center; width: 100%; padding: 30px; background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px; color: var(--text-muted); cursor: pointer; box-sizing: border-box; font-size: 1.05rem; text-align: center; padding: 40px 20px;}
+        .file-upload-label { display: flex; align-items: center; justify-content: center; flex-direction: column; width: 100%; padding: 40px 20px; background: var(--input-bg); border: 1px dashed var(--input-border); border-radius: 16px; color: var(--text-muted); cursor: pointer; box-sizing: border-box; font-size: 1.05rem; text-align: center; }
         .file-upload-label:hover { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); }
 
         .slider-container { position: relative; width: 100%; padding: 10px 0; }
@@ -119,6 +119,17 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .pulse-text { animation: pulseOpacity 1.5s ease-in-out infinite; }
         @keyframes pulseOpacity { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* 3D Flashcard Styles */
+        #flashcard-container { display: none; }
+        .flashcard-scene { width: 100%; height: 350px; perspective: 1000px; cursor: pointer; margin-bottom: 30px; margin-top: 10px; }
+        .flashcard-inner { width: 100%; height: 100%; position: relative; transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); transform-style: preserve-3d; }
+        .flashcard-inner.is-flipped { transform: rotateY(180deg); }
+        .flashcard-front, .flashcard-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; box-sizing: border-box; background: var(--input-bg); border: 2px solid var(--theme-color); border-radius: 20px; box-shadow: 0 15px 35px var(--card-shadow); text-align: center; }
+        .flashcard-back { transform: rotateY(180deg); background: var(--glass-bg); border-color: var(--success); }
+        .flashcard-front h3 { font-size: 2.2rem; margin: 0; color: var(--text-main); line-height: 1.3;}
+        .flashcard-back p { font-size: 1.4rem; margin: 0; color: var(--text-main); line-height: 1.6; }
+        .flip-hint { font-size: 0.9rem; color: var(--text-muted); position: absolute; bottom: 20px; font-weight: 500; opacity: 0.7;}
 
         #quiz-container, #result-container, #review-container, #loading-screen { display: none; }
         .progress-wrapper { margin-bottom: 30px; } .progress-bar-bg { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; overflow: hidden; } .progress-fill { height: 100%; background: var(--theme-color); width: 0%; transition: width 0.4s ease; } .progress-text { margin-top: 10px; font-size: 0.9rem; color: var(--text-muted); font-weight: 500; display: flex; justify-content: space-between; } .question-text { font-size: 1.3rem; margin-bottom: 25px; line-height: 1.5; font-weight: 500;} .option-btn { display: flex; align-items: center; width: 100%; text-align: left; background: var(--option-bg); border: 1px solid var(--option-border); color: var(--text-main); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; cursor: pointer; font-size: 1.05rem; transition: all 0.2s ease; } .option-label { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; background: var(--input-bg); border: 1px solid var(--option-border); border-radius: 8px; margin-right: 15px; font-weight: 700; font-size: 1rem; color: var(--text-muted); } .option-btn.selected { border-color: var(--theme-color); box-shadow: 0 0 15px rgba(96, 165, 250, 0.2); transform: translateX(5px); } .option-btn.selected .option-label { background: var(--theme-color); color: var(--bg-base); border-color: var(--theme-color); } .nav-buttons { display: flex; gap: 15px; margin-top: 30px; } .nav-btn { flex: 1; } .nav-btn.secondary { background: var(--input-bg); color: var(--text-main); box-shadow: none; border: 1px solid var(--option-border); } .result-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block; } .result-title { font-size: 2.5rem; margin: 0 0 10px 0; color: var(--text-main); } .result-score { font-size: 5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 20px 0; } .result-subtitle { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 40px; } .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); } .review-block { background: var(--question-bg); padding: 25px; border-radius: 16px; border: 1px solid var(--option-border); margin-bottom: 20px; text-align: left; } .review-q { font-size: 1.15rem; font-weight: 500; margin-bottom: 15px; color: var(--text-main); line-height: 1.5; } .review-ans { font-size: 1rem; margin-bottom: 8px; padding: 12px 15px; border-radius: 8px; font-weight: 500;} .review-ans.correct { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); } .review-ans.wrong { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); } .ai-insight { background: rgba(96, 165, 250, 0.05); border-left: 4px solid var(--theme-color); padding: 15px 20px; margin-top: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem; color: var(--text-muted); line-height: 1.6; } .ai-insight strong { color: var(--theme-color); font-weight: 600; display: block; margin-bottom: 5px;}
@@ -254,9 +265,11 @@
             
             <div class="form-group">
                 <div class="label-wrap"><svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>Upload Module</div>
-                <label class="file-upload-label" id="drop-zone" for="document"><span id="file-name-display">Drop PDF / PPTX here or click to browse</span></label>
+                <label class="file-upload-label" id="drop-zone" for="document">
+                    <span id="file-name-display">Drop PDF / PPTX here or click to browse</span>
+                    <span style="font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; text-align: center;">(Max 10MB. Text-based files work best)</span>
+                </label>
                 <input type="file" id="document" name="document" accept=".pdf, .pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/pdf" required>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; text-align: center;">(Max 10MB. Text-based PDFs & PPTXs work best)</p>
             </div>
             
             <div class="form-group">
@@ -292,13 +305,36 @@
             </div>
         </div>
 
+        <div id="flashcard-container">
+            <div class="progress-wrapper"><div class="progress-bar-bg"><div class="progress-fill" id="fc-progress-fill"></div></div><div class="progress-text"><span id="fc-progress-count"></span></div></div>
+            
+            <div class="flashcard-scene" onclick="flipCard()">
+                <div class="flashcard-inner" id="fc-inner">
+                    <div class="flashcard-front">
+                        <h3 id="fc-term">Loading...</h3>
+                        <p class="flip-hint">Tap to reveal definition ↺</p>
+                    </div>
+                    <div class="flashcard-back">
+                        <p id="fc-def">Loading...</p>
+                        <p class="flip-hint">Tap to flip back ↺</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="nav-buttons">
+                <button class="generate-btn nav-btn secondary" id="fcPrevBtn" style="display: none;">Back</button>
+                <button class="generate-btn nav-btn" id="fcNextBtn">Next Card</button>
+                <button class="generate-btn nav-btn" id="fcFinishBtn" style="display: none;">Finish Study</button>
+            </div>
+        </div>
+
         <div id="result-container" style="text-align: center;">
             <div class="result-icon" id="result-emoji">🏆</div>
             <h2 class="result-title" id="result-title"></h2>
             <div class="result-score" id="result-score"></div>
             <p class="result-subtitle" id="result-subtitle"></p>
-            <button class="generate-btn" onclick="retakeQuiz()">Retake This Test</button>
-            <button class="generate-btn ghost-btn" style="margin-top: 15px;" onclick="showReview()">Review Answers & Insights</button>
+            <button class="generate-btn" id="retake-btn" onclick="retakeQuiz()">Retake This Test</button>
+            <button class="generate-btn ghost-btn" id="review-btn" style="margin-top: 15px;" onclick="showReview()">Review Answers & Insights</button>
             <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">Back to Dashboard</button>
         </div>
 
@@ -520,6 +556,7 @@
     function closeTool() {
         document.getElementById('tool-view').style.display = 'none';
         document.getElementById('dashboard-view').style.display = 'block';
+        document.getElementById('quizForm').style.display = 'block'; // Reset form visibility
     }
 
     const root = document.documentElement;
@@ -575,7 +612,7 @@
         
         e.target.style.display = 'none';
         loadingScreen.style.display = 'block';
-        document.querySelector('.ghost-btn').style.display = 'none'; // Hide the back button while loading
+        document.querySelector('.ghost-btn').style.display = 'none'; // Hide back button while loading
 
         let phraseIndex = 0;
         loadingTitle.innerText = loadingPhrases[phraseIndex].title;
@@ -597,15 +634,16 @@
             document.querySelector('.ghost-btn').style.display = 'inline-block';
             
             const currentMode = document.getElementById('generation-mode').value;
+            quizData = data.quiz; 
+            currentIndex = 0;
             
             if (currentMode === 'quiz') {
-                quizData = data.quiz; userAnswers = new Array(quizData.length).fill(null); currentIndex = 0;
+                userAnswers = new Array(quizData.length).fill(null); 
                 document.getElementById('quiz-container').style.display = 'block';
                 renderQuestion();
             } else {
-                // Temporary alert until we build the Flashcard UI in Stage 2
-                alert("Flashcard logic successfully triggered! We will build the UI next.");
-                e.target.style.display = 'block';
+                document.getElementById('flashcard-container').style.display = 'block';
+                renderFlashcard();
             }
             
         } catch (error) { 
@@ -617,6 +655,7 @@
         }
     });
 
+    // --- QUIZ LOGIC ---
     function renderQuestion() {
         const q = quizData[currentIndex];
         const progress = ((currentIndex + 1) / quizData.length) * 100;
@@ -645,10 +684,6 @@
     document.getElementById('nextBtn').addEventListener('click', () => { if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); } });
     document.getElementById('prevBtn').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; renderQuestion(); } });
 
-    function fireConfetti() { var duration = 7000; var end = Date.now() + duration; (function frame() { confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#60a5fa', '#10b981', '#c084fc'] }); confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#60a5fa', '#10b981', '#c084fc'] }); if (Date.now() < end) requestAnimationFrame(frame); }()); }
-    function fireAlmostThere() { confetti({ particleCount: 50, spread: 70, origin: { y: 0.8 }, colors: ['#fbbf24', '#f59e0b', '#60a5fa'] }); }
-    function fireOops() { confetti({ particleCount: 40, angle: 270, spread: 60, origin: { y: -0.1 }, colors: ['#475569', '#94a3b8'], gravity: 0.8, ticks: 300 }); const emojiEl = document.getElementById('result-emoji'); emojiEl.classList.remove('shake-animation'); void emojiEl.offsetWidth; emojiEl.classList.add('shake-animation'); }
-
     document.getElementById('submitQuizBtn').addEventListener('click', () => {
         let score = 0; quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
         const percent = Math.round((score / quizData.length) * 100);
@@ -661,46 +696,90 @@
         let emoji, title, subtitle;
         
         if (percent >= 90) { 
-            emoji = "🏆"; 
-            const titles = ["Outstanding!", "Flawless Victory!", "Absolute Genius!"];
-            const subtitles = [`Genius level unlocked. You crushed this, ${currentUserName}.`, `Incredible work, ${currentUserName}. You barely broke a sweat.`, `Perfect execution, ${currentUserName}. Nothing gets past you.`];
-            title = titles[Math.floor(Math.random() * titles.length)];
-            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            emoji = "🏆"; title = "Outstanding!"; subtitle = `Genius level unlocked. You crushed this, ${currentUserName}.`;
             fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]); 
         } 
         else if (percent >= 70) { 
-            emoji = "🔥"; 
-            const titles = ["Great Work!", "Solid Run!", "Nicely Done!"];
-            const subtitles = [`You have a solid grip on this material, ${currentUserName}.`, `Good job, ${currentUserName}. You really know your stuff.`, `Strong performance, ${currentUserName}. Keep this momentum going.`];
-            title = titles[Math.floor(Math.random() * titles.length)];
-            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            emoji = "🔥"; title = "Great Work!"; subtitle = `You have a solid grip on this material, ${currentUserName}.`;
             fireConfetti(); if(fxOverlay) fxOverlay.classList.add('flash-green-fx'); if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
         } 
         else if (percent >= 50) { 
-            emoji = "🔱"; 
-            const titles = ["Almost There.", "Not Bad.", "Halfway There."];
-            const subtitles = [`Good effort, ${currentUserName}, but you should review these concepts.`, `You are getting there, ${currentUserName}. Just a few blind spots to fix.`, `Keep at it, ${currentUserName}. A quick review will push you to the top.`];
-            title = titles[Math.floor(Math.random() * titles.length)];
-            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            emoji = "🔱"; title = "Almost There."; subtitle = `Good effort, ${currentUserName}, but you should review these concepts.`;
             fireAlmostThere(); if (navigator.vibrate) navigator.vibrate([50]); 
         } 
         else { 
-            emoji = "🧠"; 
-            const titles = ["Keep Pushing.", "Ouch.", "Tough Break."];
-            const subtitles = [`Tough module, ${currentUserName}. Better check the insights and try again.`, `Ouch, so sorry ${currentUserName}. Don't let this stop you. Keep pushing.`, `That was a rough one, ${currentUserName}. Review the answers and bounce back.`];
-            title = titles[Math.floor(Math.random() * titles.length)];
-            subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+            emoji = "🧠"; title = "Keep Pushing."; subtitle = `Tough module, ${currentUserName}. Better check the insights and try again.`;
             fireOops(); if(fxOverlay) fxOverlay.classList.add('flash-red-fx'); if(mainContainer) mainContainer.classList.add('screen-shake'); if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]); 
         }
 
         document.getElementById('result-emoji').innerText = emoji; 
         document.getElementById('result-title').innerText = title; 
         document.getElementById('result-score').innerText = `${percent}%`; 
+        document.getElementById('result-score').style.display = 'block';
         document.getElementById('result-subtitle').innerText = subtitle;
         document.getElementById('quiz-container').style.display = 'none'; 
+        
+        document.getElementById('review-btn').style.display = 'inline-block';
+        document.getElementById('retake-btn').innerText = "Retake This Test";
+        
         document.getElementById('result-container').style.display = 'block';
     });
 
+
+    // --- FLASHCARD LOGIC ---
+    function renderFlashcard() {
+        const card = quizData[currentIndex];
+        const progress = ((currentIndex + 1) / quizData.length) * 100;
+        
+        document.getElementById('fc-progress-fill').style.width = `${progress}%`;
+        document.getElementById('fc-progress-count').innerText = `Card ${currentIndex + 1} of ${quizData.length}`;
+        
+        document.getElementById('fc-term').innerText = card.term;
+        document.getElementById('fc-def').innerText = card.definition;
+        
+        // Force the card to front side when rendering a new one
+        const inner = document.getElementById('fc-inner');
+        inner.classList.remove('is-flipped');
+
+        const nextBtn = document.getElementById('fcNextBtn'); 
+        const prevBtn = document.getElementById('fcPrevBtn'); 
+        const finishBtn = document.getElementById('fcFinishBtn');
+        
+        prevBtn.style.display = currentIndex > 0 ? 'block' : 'none';
+        
+        if (currentIndex === quizData.length - 1) { 
+            nextBtn.style.display = 'none'; 
+            finishBtn.style.display = 'block'; 
+        } else { 
+            nextBtn.style.display = 'block'; 
+            finishBtn.style.display = 'none'; 
+        }
+    }
+
+    function flipCard() {
+        document.getElementById('fc-inner').classList.toggle('is-flipped');
+    }
+
+    document.getElementById('fcNextBtn').addEventListener('click', () => { if (currentIndex < quizData.length - 1) { currentIndex++; renderFlashcard(); } });
+    document.getElementById('fcPrevBtn').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; renderFlashcard(); } });
+
+    document.getElementById('fcFinishBtn').addEventListener('click', () => {
+        document.getElementById('flashcard-container').style.display = 'none';
+        
+        fireConfetti();
+        document.getElementById('result-emoji').innerText = "🧠"; 
+        document.getElementById('result-title').innerText = "Study Session Complete!"; 
+        document.getElementById('result-score').style.display = 'none'; // No score for flashcards
+        document.getElementById('result-subtitle').innerText = `Great job reviewing those terms, ${currentUserName}.`;
+        
+        document.getElementById('review-btn').style.display = 'none';
+        document.getElementById('retake-btn').innerText = "Restart Flashcards";
+        
+        document.getElementById('result-container').style.display = 'block';
+    });
+
+
+    // --- SHARED UTILS ---
     function showReview() {
         document.getElementById('result-container').style.display = 'none'; document.getElementById('review-container').style.display = 'block';
         const content = document.getElementById('review-content'); content.innerHTML = '';
@@ -715,7 +794,21 @@
     }
 
     function hideReview() { document.getElementById('review-container').style.display = 'none'; document.getElementById('result-container').style.display = 'block'; }
-    function retakeQuiz() { userAnswers = new Array(quizData.length).fill(null); currentIndex = 0; document.getElementById('result-container').style.display = 'none'; document.getElementById('quiz-container').style.display = 'block'; renderQuestion(); }
+    
+    function retakeQuiz() { 
+        document.getElementById('result-container').style.display = 'none';
+        const currentMode = document.getElementById('generation-mode').value;
+        currentIndex = 0;
+        
+        if (currentMode === 'quiz') {
+            userAnswers = new Array(quizData.length).fill(null); 
+            document.getElementById('quiz-container').style.display = 'block'; 
+            renderQuestion();
+        } else {
+            document.getElementById('flashcard-container').style.display = 'block'; 
+            renderFlashcard();
+        }
+    }
 </script>
 
 </body>
