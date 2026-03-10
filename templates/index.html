@@ -124,7 +124,11 @@
         .chat-bubble { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 1.05rem; line-height: 1.5; color: var(--text-main); }
         .chat-bubble.ai { align-self: flex-start; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); border-bottom-left-radius: 4px; }
         .chat-bubble.user { align-self: flex-end; background: var(--theme-color); color: #020617; border-bottom-right-radius: 4px; font-weight: 500; }
-        .chat-input-wrapper { display: flex; gap: 10px; }
+        .chat-input-wrapper { display: flex; gap: 10px; align-items: center; }
+        
+        /* Microphone Button Pulse */
+        @keyframes micPulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        .mic-active { animation: micPulse 1.5s infinite; background: rgba(239, 68, 68, 0.1) !important; border-color: var(--error) !important; color: var(--error) !important; }
 
         /* 3D Flashcard Styles */
         #flashcard-container { display: none; }
@@ -158,7 +162,6 @@
         .lang-option { padding: 10px 15px; cursor: pointer; border-radius: 8px; font-size: 0.95rem; color: var(--text-main); font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between; }
         .lang-option:hover { background: rgba(96, 165, 250, 0.15); color: var(--theme-color); transform: translateX(5px); }
         
-        /* Mobile Performance Optimization (Fixes iOS Safari Crash) */
         @media (max-width: 768px) {
             .container { perspective: none; }
             .glass-card { transform-style: flat; }
@@ -269,7 +272,12 @@
             <div class="dash-card" onclick="openTool('chat')">
                 <div class="dash-icon">💬</div>
                 <h3>Chat & Learn</h3>
-                <p>Ask questions and get thorough explanations</p>
+                <p>Ask questions and get explanations</p>
+            </div>
+            <div class="dash-card" onclick="openTool('voice')">
+                <div class="dash-icon">🎤</div>
+                <h3>Voice Ask</h3>
+                <p>Ask questions with your voice</p>
             </div>
         </div>
     </div>
@@ -321,7 +329,12 @@
                 <div class="chat-bubble ai">Hello! I have read your document. What would you like me to explain?</div>
             </div>
             <div class="chat-input-wrapper">
-                <input type="text" id="chat-input-box" class="auth-input" placeholder="Type your question here..." style="margin-bottom: 0; flex: 1;">
+                <button id="mic-btn" class="icon-btn icon-only" style="background: var(--input-bg); border-color: var(--input-border); color: var(--theme-color);" title="Use Microphone">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                    </svg>
+                </button>
+                <input type="text" id="chat-input-box" class="auth-input" placeholder="Type or speak your question..." style="margin-bottom: 0; flex: 1;">
                 <button class="generate-btn" id="send-chat-btn" style="width: auto; margin-top: 0; padding: 0 20px; border-radius: 12px;">Send</button>
             </div>
             <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">End Chat Session</button>
@@ -575,11 +588,11 @@
         document.getElementById('generation-mode').value = mode;
         
         const isQuiz = mode === 'quiz';
-        const isChat = mode === 'chat';
+        const isChat = mode === 'chat' || mode === 'voice';
         
         if (isChat) {
-            document.getElementById('tool-title').innerText = 'Chat & Learn';
-            document.getElementById('submitBtn').innerText = 'START CHAT SESSION';
+            document.getElementById('tool-title').innerText = mode === 'voice' ? 'Voice Ask' : 'Chat & Learn';
+            document.getElementById('submitBtn').innerText = 'START SESSION';
             document.getElementById('difficulty-group').style.display = 'none';
             document.getElementById('target-output-group').style.display = 'none';
         } else {
@@ -636,8 +649,6 @@
     });
 
     let quizData = []; let userAnswers = []; let currentIndex = 0;
-    
-    // NEW: Variable to hold the Google File ID for fast chatting
     let activeFileId = null; 
 
     let loadingInterval;
@@ -655,12 +666,13 @@
         e.preventDefault();
         
         const currentMode = document.getElementById('generation-mode').value;
+        const isChatMode = currentMode === 'chat' || currentMode === 'voice';
         
         e.target.style.display = 'none';
         loadingScreen.style.display = 'block';
         document.querySelector('.ghost-btn').style.display = 'none'; 
 
-        if (currentMode === 'chat') {
+        if (isChatMode) {
             loadingTitle.innerText = "Initializing AI Tutor...";
             loadingSubtitle.innerText = "Uploading document securely to the memory bank.";
         } else {
@@ -682,22 +694,24 @@
             const safeFormData = new FormData();
             safeFormData.append('document', file, 'safe_upload' + ext);
             
-            // --- FAST ARCHITECTURE ROUTING ---
-            if (currentMode === 'chat') {
+            if (isChatMode) {
                 const response = await fetch('/init_chat', { method: 'POST', body: safeFormData });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
                 
-                // Save the lightweight ID
                 activeFileId = data.file_id;
                 
                 loadingScreen.style.display = 'none';
                 document.querySelector('.ghost-btn').style.display = 'inline-block';
                 document.getElementById('chat-ui-container').style.display = 'block';
+                
+                // If they specifically clicked "Voice Ask", auto-trigger the mic
+                if (currentMode === 'voice' && document.getElementById('mic-btn')) {
+                    setTimeout(() => document.getElementById('mic-btn').click(), 500);
+                }
                 return; 
             }
 
-            // Normal Quiz/Flashcard generation
             safeFormData.append('difficulty', document.getElementById('difficulty-hidden').value);
             safeFormData.append('num_questions', document.getElementById('num_questions').value);
             safeFormData.append('mode', currentMode);
@@ -732,12 +746,53 @@
     });
 
     // ==========================================
-    // 4. FAST CHAT & LEARN LOGIC
+    // 4. FAST CHAT, VOICE ASK & MEMORY LOGIC
     // ==========================================
     let chatHistory = [];
     const sendChatBtn = document.getElementById('send-chat-btn');
     const chatInputBox = document.getElementById('chat-input-box');
     const chatMessages = document.getElementById('chat-messages');
+    const micBtn = document.getElementById('mic-btn');
+
+    // Speech Recognition Setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        micBtn.addEventListener('click', () => {
+            micBtn.classList.add('mic-active');
+            chatInputBox.placeholder = "Listening...";
+            recognition.start();
+        });
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            chatInputBox.value = transcript;
+            resetMic();
+            sendChatBtn.click(); // Auto-send the message once it hears you
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech error", event.error);
+            resetMic();
+            chatInputBox.placeholder = "Type or speak your question...";
+            alert("Could not hear you perfectly. Try clicking the mic again.");
+        };
+
+        recognition.onend = () => {
+            resetMic();
+            chatInputBox.placeholder = "Type or speak your question...";
+        };
+        
+        function resetMic() {
+            micBtn.classList.remove('mic-active');
+        }
+    } else {
+        // Hide mic button if browser doesn't support it
+        micBtn.style.display = 'none';
+    }
 
     sendChatBtn.addEventListener('click', async () => {
         const message = chatInputBox.value.trim();
@@ -756,7 +811,7 @@
 
         try {
             const formData = new FormData();
-            formData.append('file_id', activeFileId); // Use the fast ID
+            formData.append('file_id', activeFileId); 
             formData.append('message', message);
             formData.append('history', JSON.stringify(chatHistory));
 
@@ -784,9 +839,9 @@
         
         // Clean up the AI's Markdown text into actual HTML
         let formattedText = text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Turns **text** into bold
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')             // Turns *text* into italics
-            .replace(/\n/g, '<br>');                          // Fixes line breaks
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')             
+            .replace(/\n/g, '<br>');                          
             
         bubble.innerHTML = formattedText;
         
