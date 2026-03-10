@@ -781,7 +781,15 @@
     function appendChatMessage(role, text) {
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble ' + role;
-        bubble.innerText = text;
+        
+        // Clean up the AI's Markdown text into actual HTML
+        let formattedText = text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Turns **text** into bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')             // Turns *text* into italics
+            .replace(/\n/g, '<br>');                          // Fixes line breaks
+            
+        bubble.innerHTML = formattedText;
+        
         chatMessages.appendChild(bubble);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
