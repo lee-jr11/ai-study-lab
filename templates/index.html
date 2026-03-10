@@ -874,6 +874,74 @@
             renderFlashcard();
         }
     }
+
+    // ==========================================
+    // 4. CHAT & LEARN LOGIC
+    // ==========================================
+    let chatHistory = [];
+    const sendChatBtn = document.getElementById('send-chat-btn');
+    const chatInputBox = document.getElementById('chat-input-box');
+    const chatMessages = document.getElementById('chat-messages');
+
+    // Remove the temporary alert from the button
+    sendChatBtn.removeAttribute('onclick');
+
+    sendChatBtn.addEventListener('click', async () => {
+        const message = chatInputBox.value.trim();
+        if (!message) return;
+
+        // Display the user's message immediately
+        appendChatMessage('user', message);
+        chatInputBox.value = '';
+        
+        // Lock the input while the AI reads the document
+        sendChatBtn.disabled = true;
+        sendChatBtn.innerText = 'Thinking...';
+
+        try {
+            // Grab the file again safely for iOS
+            const fileInput = document.getElementById('document');
+            const file = fileInput.files[0];
+            const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.pdf';
+            
+            const formData = new FormData();
+            formData.append('document', file, 'safe_upload' + ext);
+            formData.append('message', message);
+            formData.append('history', JSON.stringify(chatHistory));
+
+            // Save the user's message to the running memory
+            chatHistory.push({ role: 'user', content: message });
+
+            // Call the new Python brain
+            const response = await fetch('/chat', { method: 'POST', body: formData });
+            const data = await response.json();
+            
+            if (!response.ok) throw new Error(data.error);
+
+            // Display the AI's response
+            appendChatMessage('ai', data.reply);
+            
+            // Save the AI's response to the running memory
+            chatHistory.push({ role: 'ai', content: data.reply });
+
+        } catch (error) {
+            appendChatMessage('ai', 'System Error: ' + error.message);
+        } finally {
+            sendChatBtn.disabled = false;
+            sendChatBtn.innerText = 'Send';
+        }
+    });
+
+    function appendChatMessage(role, text) {
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble ' + role;
+        bubble.innerText = text;
+        chatMessages.appendChild(bubble);
+        
+        // Auto-scroll to the bottom of the chat
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
 </script>
 
 </body>
