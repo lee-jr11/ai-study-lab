@@ -188,7 +188,7 @@ def chat_with_document():
         
     except Exception as e:
         print(f"Error generating chat: {e}")
-        return jsonify({'error': 'The AI tutor failed to process this message.'}), 500
+        return jsonify({'error': f'The engine says: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
