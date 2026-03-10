@@ -89,7 +89,7 @@ def generate_quiz():
             contents.append(gemini_file)
 
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
@@ -180,7 +180,7 @@ def chat_with_document():
         contents = [gemini_file, prompt]
 
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=contents
         )
             
