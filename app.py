@@ -44,13 +44,11 @@ def generate_quiz():
 
     file_ext = os.path.splitext(file.filename)[1].lower()
     
-    # Save the file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
         file.save(temp_file.name)
         temp_file_path = temp_file.name
 
     try:
-        # THE FORK IN THE ROAD (Quiz vs Flashcards)
         if mode == 'flashcard':
             prompt = f"""
             You are an expert tutor. I will provide a document.
@@ -83,7 +81,6 @@ def generate_quiz():
         contents = [prompt]
         gemini_file = None
         
-        # Logic Fork: Handle PPTX locally, handle PDF via Gemini API
         if file_ext == '.pptx':
             pptx_text = extract_text_from_pptx(temp_file_path)
             contents.append(f"Here is the lecture text:\n\n{pptx_text}")
@@ -91,7 +88,6 @@ def generate_quiz():
             gemini_file = client.files.upload(file=temp_file_path)
             contents.append(gemini_file)
 
-        # Call the engine
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=contents,
@@ -102,7 +98,6 @@ def generate_quiz():
         
         quiz_data = json.loads(response.text)
         
-        # Clean up the cloud vault if it was a PDF
         if gemini_file:
             client.files.delete(name=gemini_file.name)
             
@@ -113,36 +108,64 @@ def generate_quiz():
         return jsonify({'error': 'The engine failed to process this document. It may be too large or complex.'}), 500
         
     finally:
-        # Always delete the temporary file off your hard drive
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
 # ==========================================
-# NEW TOOL: CHAT & LEARN ROUTE
+# NEW: STAGE 1 - INITIALIZE CHAT
+# Uploads the document to Google once and returns an ID.
 # ==========================================
-@app.route('/chat', methods=['POST'])
-def chat_with_document():
+@app.route('/init_chat', methods=['POST'])
+def init_chat():
     if 'document' not in request.files:
         return jsonify({'error': 'No document uploaded'}), 400
-        
+
     file = request.files['document']
-    user_message = request.form.get('message', '')
-    chat_history = request.form.get('history', '[]')
-
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
     file_ext = os.path.splitext(file.filename)[1].lower()
-    
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
         file.save(temp_file.name)
         temp_file_path = temp_file.name
 
     try:
-        # Parse the running memory of the chat from the frontend
+        gemini_file = None
+        if file_ext == '.pptx':
+            # Extract PPTX text and save as a .txt file so Google can read it
+            pptx_text = extract_text_from_pptx(temp_file_path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.txt', mode='w') as txt_file:
+                txt_file.write(pptx_text)
+                txt_path = txt_file.name
+            gemini_file = client.files.upload(file=txt_path)
+            os.remove(txt_path) 
+        else:
+            gemini_file = client.files.upload(file=temp_file_path)
+
+        # Return the unique file ID to the frontend
+        return jsonify({'file_id': gemini_file.name})
+
+    except Exception as e:
+        print(f"Error initializing chat: {e}")
+        return jsonify({'error': 'Failed to process document for chat.'}), 500
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+# ==========================================
+# NEW: STAGE 2 - LIGHTNING FAST CHAT
+# Uses the existing file ID instead of re-uploading.
+# ==========================================
+@app.route('/chat', methods=['POST'])
+def chat_with_document():
+    file_id = request.form.get('file_id')
+    user_message = request.form.get('message', '')
+    chat_history = request.form.get('history', '[]')
+
+    if not file_id:
+        return jsonify({'error': 'Missing file context.'}), 400
+
+    try:
         history_list = json.loads(chat_history)
         
-        # Build the AI prompt with history so it remembers the conversation
         prompt = "You are an expert, friendly AI tutor. Use the attached document to answer the student's question.\n\n"
         if history_list:
             prompt += "Here is the chat history so far:\n"
@@ -152,35 +175,20 @@ def chat_with_document():
         
         prompt += f"\nStudent's New Question: {user_message}\n\nPlease provide a clear, helpful response as the Tutor. Keep it conversational and easy to read."
 
-        contents = [prompt]
-        gemini_file = None
-        
-        if file_ext == '.pptx':
-            pptx_text = extract_text_from_pptx(temp_file_path)
-            contents.append(f"Document Material:\n\n{pptx_text}")
-        else:
-            gemini_file = client.files.upload(file=temp_file_path)
-            contents.append(gemini_file)
+        # Fetch the already-uploaded file directly from Google's servers
+        gemini_file = client.files.get(name=file_id)
+        contents = [gemini_file, prompt]
 
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=contents
         )
-        
-        # Clean up the cloud vault if it was a PDF
-        if gemini_file:
-            client.files.delete(name=gemini_file.name)
             
         return jsonify({'reply': response.text})
         
     except Exception as e:
         print(f"Error generating chat: {e}")
         return jsonify({'error': 'The AI tutor failed to process this message.'}), 500
-        
-    finally:
-        # Always delete the temporary file
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
 
 if __name__ == '__main__':
     app.run(debug=True)
