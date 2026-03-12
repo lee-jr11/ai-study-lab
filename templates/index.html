@@ -1029,7 +1029,40 @@
     function fireOops() {
         // Intentionally left blank so the script doesn't crash on a low score
     }
+    
+    // ==========================================
+    // 5. AUTO-LOGOUT SECURE TIMER (5 MINUTES)
+    // ==========================================
+    let inactivityTimer;
+    const timeLimit = 5 * 60 * 1000; // 5 minutes in milliseconds
 
+    function resetTimer() {
+        clearTimeout(inactivityTimer);
+        // Only start the countdown if someone is actually logged in
+        if (auth.currentUser) {
+            inactivityTimer = setTimeout(forceLogout, timeLimit);
+        }
+    }
+
+    function forceLogout() {
+        auth.signOut().then(() => {
+            // Show a friendly message on the login wall
+            showError("Session expired due to 5 minutes of inactivity. Please sign in again.");
+            errorBox.style.color = "var(--theme-color)"; // Make it blue instead of red
+            
+            // Reset the error box color back to normal red after 7 seconds
+            setTimeout(() => { errorBox.style.color = "var(--error)"; }, 7000);
+        });
+    }
+
+    // Listen for any human activity to keep the session alive
+    window.onload = resetTimer;
+    document.onmousemove = resetTimer;
+    document.onkeypress = resetTimer;
+    document.onscroll = resetTimer;
+    document.ontouchstart = resetTimer;
+    document.onclick = resetTimer;
+    
 </script>
 
 </body>
