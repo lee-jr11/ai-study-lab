@@ -478,7 +478,14 @@
                 .finally(() => resetAuthBtn());
         } else {
             auth.signInWithEmailAndPassword(email, password)
-                .catch(error => showError(error.message))
+                .catch(error => {
+                    // Intercept the ugly Firebase error and show the friendly one
+                    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                        showError("Incorrect password, please try again.");
+                    } else {
+                        showError(error.message); // Leave other unexpected errors alone
+                    }
+                })
                 .finally(() => resetAuthBtn());
         }
     });
