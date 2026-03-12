@@ -1010,6 +1010,26 @@
             renderFlashcard();
         }
     }
+
+    // ==========================================
+    // MISSING VISUAL EFFECTS (CONFETTI FIX)
+    // ==========================================
+    function fireConfetti() {
+        if (typeof confetti === 'function') {
+            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, zIndex: 9999 });
+        }
+    }
+
+    function fireAlmostThere() {
+        if (typeof confetti === 'function') {
+            confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 }, colors: ['#60a5fa', '#c084fc'], zIndex: 9999 });
+        }
+    }
+
+    function fireOops() {
+        // Intentionally left blank so the script doesn't crash on a low score
+    }
+
 </script>
 
 </body>
