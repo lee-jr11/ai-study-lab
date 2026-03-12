@@ -1034,7 +1034,7 @@
     // 5. AUTO-LOGOUT SECURE TIMER (5 MINUTES)
     // ==========================================
     let inactivityTimer;
-    const timeLimit = 5 * 60 * 1000; // 5 minutes in milliseconds
+    const timeLimit = 3 * 60 * 1000; // 3 minutes in milliseconds
 
     function resetTimer() {
         clearTimeout(inactivityTimer);
@@ -1047,7 +1047,7 @@
     function forceLogout() {
         auth.signOut().then(() => {
             // Show a friendly message on the login wall
-            showError("Session expired due to 5 minutes of inactivity. Please sign in again.");
+            showError("Session expired. Please sign in again.");
             errorBox.style.color = "var(--theme-color)"; // Make it blue instead of red
             
             // Reset the error box color back to normal red after 7 seconds
