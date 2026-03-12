@@ -404,7 +404,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    // Keep user logged in even if the tab goes to sleep
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
     // ==========================================
@@ -423,7 +422,6 @@
             authContainer.style.display = 'none';
             appContainer.style.display = 'block';
             logoutBtn.style.display = 'flex';
-            
             let rawName = user.displayName || "Explorer";
             currentUserName = rawName.split(' ')[0];
             document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
@@ -443,12 +441,10 @@
         
         const signupFields = document.getElementById('signup-fields');
         signupFields.style.display = isSignUpMode ? 'block' : 'none';
-        
         document.getElementById('auth-firstname').required = isSignUpMode;
         errorBox.style.display = 'none';
     }
 
-    // THIS IS THE BLOCK THAT HAD THE BUG. IT IS NOW PERFECTLY SECURED.
     document.getElementById('authForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const email = document.getElementById('auth-email').value;
@@ -656,7 +652,7 @@
     });
 
     // ==========================================
-    // THE NEW FULL BLACK LASER SCREEN LOGIC
+    // THE FULL BLACK LASER SCREEN LOGIC
     // ==========================================
     let flyingWordInterval;
     function startBlackScanner() {
@@ -668,11 +664,10 @@
             const span = document.createElement('span');
             span.className = 'floating-word';
             span.innerText = words[Math.floor(Math.random() * words.length)];
-            span.style.left = Math.random() * 60 + 20 + '%'; // Keep words somewhat centered horizontally
-            span.style.top = Math.random() * 80 + 10 + '%';  // Random height
+            span.style.left = Math.random() * 60 + 20 + '%'; 
+            span.style.top = Math.random() * 80 + 10 + '%';  
             
             loader.appendChild(span);
-            // Clean up the word after it finishes floating
             setTimeout(() => { if (loader.contains(span)) span.remove(); }, 3000);
         }, 800);
     }
@@ -681,7 +676,6 @@
         clearInterval(flyingWordInterval);
         const loader = document.getElementById('full-black-loader');
         loader.style.display = 'none';
-        // Erase any leftover words
         document.querySelectorAll('.floating-word').forEach(el => el.remove());
     }
 
@@ -697,7 +691,6 @@
         e.target.style.display = 'none';
         document.querySelector('.ghost-btn').style.display = 'none'; 
         
-        // Trigger the cinematic black laser screen
         startBlackScanner();
 
         try {
@@ -719,7 +712,6 @@
                 document.querySelector('.ghost-btn').style.display = 'inline-block';
                 document.getElementById('chat-ui-container').style.display = 'block';
                 
-                // If they specifically clicked "Voice Ask", auto-trigger the mic
                 if (currentMode === 'voice' && document.getElementById('mic-btn')) {
                     setTimeout(() => document.getElementById('mic-btn').click(), 500);
                 }
@@ -758,7 +750,7 @@
     });
 
     // ==========================================
-    // 4. FAST CHAT, VOICE ASK & MEMORY LOGIC
+    // 4. FAST CHAT, VOICE ASK & OMNI-BROWSER MIC LOGIC
     // ==========================================
     let chatHistory = [];
     const sendChatBtn = document.getElementById('send-chat-btn');
@@ -766,70 +758,110 @@
     const chatMessages = document.getElementById('chat-messages');
     const micBtn = document.getElementById('mic-btn');
 
-    // Speech Recognition Setup
-    // Speech Recognition Setup
-    // ==========================================
-    // SAFARI-SAFE SPEECH RECOGNITION
-    // ==========================================
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // Omni-Browser Native Speech Engine
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition;
     
     if (SpeechRecognition) {
         micBtn.addEventListener('click', (e) => {
-            e.preventDefault(); // Stop weird mobile double-tap behavior
+            e.preventDefault(); 
             
-            // iOS Safari fix: Create a completely fresh instance on every single tap
             const recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = false;
-            recognition.lang = 'en-US'; // iOS Safari requires this to be explicit
+            // Let the browser decide the language, which is vastly more stable globally
+            recognition.lang = document.documentElement.lang || navigator.language || 'en-US';
+
+            recognition.onstart = () => {
+                micBtn.classList.add('mic-active');
+                chatInputBox.placeholder = "Listening...";
+            };
 
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 chatInputBox.value = transcript;
                 resetMic();
-                sendChatBtn.click(); 
+                sendChatBtn.click(); // Automatically hit the Send button below
             };
 
             recognition.onerror = (event) => {
                 console.error("Speech error", event.error);
                 resetMic();
-                chatInputBox.placeholder = "Type or speak your question...";
                 
-                // Give us the exact raw error code if Apple blocks it again
-                alert("Apple Diagnostic Code: " + event.error);
+                if (event.error === 'not-allowed') {
+                    alert("Microphone blocked! Please allow permissions in your browser settings.");
+                } else {
+                    alert("Mic Error: " + event.error + ". Try speaking closer or check permissions.");
+                }
             };
 
             recognition.onend = () => {
                 resetMic();
-                chatInputBox.placeholder = "Type or speak your question...";
             };
             
-            micBtn.classList.add('mic-active');
-            chatInputBox.placeholder = "Listening...";
+            function resetMic() {
+                micBtn.classList.remove('mic-active');
+                chatInputBox.placeholder = "Type or speak your question...";
+            }
             
             try {
                 recognition.start();
             } catch (error) {
                 resetMic();
-                chatInputBox.placeholder = "Type or speak your question...";
-                alert("Mic boot failed: " + error.message);
+                alert("Mic boot failed. Please refresh the page: " + error.message);
             }
         });
-        
-        function resetMic() {
-            micBtn.classList.remove('mic-active');
-        }
     } else {
-        micBtn.addEventListener('click', () => {
-            alert("Your current browser restricts voice features. If you are on an iPhone, please open this app in Safari to use Voice Ask.");
+        // Fallback for browsers that literally don't have the engine
+        micBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            alert("Your specific browser entirely blocks native voice features. Please open this app in Chrome, Edge, or Safari to use Voice Ask.");
         });
     }
+
+    // THE FIXED SEND BUTTON LOGIC
+    sendChatBtn.addEventListener('click', async () => {
+        const message = chatInputBox.value.trim();
+        if (!message) return;
+        
+        if (!activeFileId) {
+            alert("Error: File ID is missing. Please restart the session.");
+            return;
+        }
+
+        appendChatMessage('user', message);
+        chatInputBox.value = '';
+        
+        sendChatBtn.disabled = true;
+        sendChatBtn.innerText = 'Thinking...';
+
+        try {
+            const formData = new FormData();
+            formData.append('file_id', activeFileId); 
+            formData.append('message', message);
+            formData.append('history', JSON.stringify(chatHistory));
+
+            chatHistory.push({ role: 'user', content: message });
+
+            const response = await fetch('/chat', { method: 'POST', body: formData });
+            const data = await response.json();
+            
+            if (!response.ok) throw new Error(data.error);
+
+            appendChatMessage('ai', data.reply);
+            chatHistory.push({ role: 'ai', content: data.reply });
+
+        } catch (error) {
+            appendChatMessage('ai', 'System Error: ' + error.message);
+        } finally {
+            sendChatBtn.disabled = false;
+            sendChatBtn.innerText = 'Send';
+        }
+    });
 
     function appendChatMessage(role, text) {
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble ' + role;
         
-        // Clean up the AI's Markdown text into actual HTML
         let formattedText = text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
             .replace(/\*(.*?)\*/g, '<em>$1</em>')             
@@ -841,7 +873,9 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // --- QUIZ AND FLASHCARD RENDER FUNCTIONS ---
+    // ==========================================
+    // 5. QUIZ, FLASHCARD & CONFETTI RENDER LOGIC
+    // ==========================================
     function renderQuestion() {
         const q = quizData[currentIndex];
         const progress = ((currentIndex + 1) / quizData.length) * 100;
@@ -992,8 +1026,33 @@
     }
 
     // ==========================================
-    // MISSING VISUAL EFFECTS (CONFETTI FIX)
+    // 6. AUTO-LOGOUT SECURE TIMER (3 MINUTES)
     // ==========================================
+    let inactivityTimer;
+    const timeLimit = 3 * 60 * 1000; 
+
+    function resetTimer() {
+        clearTimeout(inactivityTimer);
+        if (auth.currentUser) {
+            inactivityTimer = setTimeout(forceLogout, timeLimit);
+        }
+    }
+
+    function forceLogout() {
+        auth.signOut().then(() => {
+            showError("Session expired due to 3 minutes of inactivity. Please sign in again.");
+            errorBox.style.color = "var(--theme-color)"; 
+            setTimeout(() => { errorBox.style.color = "var(--error)"; }, 7000);
+        });
+    }
+
+    window.onload = resetTimer;
+    document.onmousemove = resetTimer;
+    document.onkeypress = resetTimer;
+    document.onscroll = resetTimer;
+    document.ontouchstart = resetTimer;
+    document.onclick = resetTimer;
+
     function fireConfetti() {
         if (typeof confetti === 'function') {
             confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, zIndex: 9999 });
@@ -1007,42 +1066,8 @@
     }
 
     function fireOops() {
-        // Intentionally left blank so the script doesn't crash on a low score
+        // Intentionally blank
     }
-    
-    // ==========================================
-    // 5. AUTO-LOGOUT SECURE TIMER (5 MINUTES)
-    // ==========================================
-    let inactivityTimer;
-    const timeLimit = 3 * 60 * 1000; // 3 minutes in milliseconds
-
-    function resetTimer() {
-        clearTimeout(inactivityTimer);
-        // Only start the countdown if someone is actually logged in
-        if (auth.currentUser) {
-            inactivityTimer = setTimeout(forceLogout, timeLimit);
-        }
-    }
-
-    function forceLogout() {
-        auth.signOut().then(() => {
-            // Show a friendly message on the login wall
-            showError("Session expired. Please sign in again.");
-            errorBox.style.color = "var(--theme-color)"; // Make it blue instead of red
-            
-            // Reset the error box color back to normal red after 7 seconds
-            setTimeout(() => { errorBox.style.color = "var(--error)"; }, 7000);
-        });
-    }
-
-    // Listen for any human activity to keep the session alive
-    window.onload = resetTimer;
-    document.onmousemove = resetTimer;
-    document.onkeypress = resetTimer;
-    document.onscroll = resetTimer;
-    document.ontouchstart = resetTimer;
-    document.onclick = resetTimer;
-    
 </script>
 
 </body>
