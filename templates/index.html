@@ -113,10 +113,12 @@
         button.google-btn { background: white; color: #444; border: 1px solid #ccc; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px; }
         button.google-btn:hover { background: #f8f8f8; box-shadow: 0 0 15px rgba(255,255,255,0.2); transform: scale(1.02); }
 
-        .loader-spinner { width: 50px; height: 50px; border: 4px solid var(--input-border); border-top-color: var(--theme-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .pulse-text { animation: pulseOpacity 1.5s ease-in-out infinite; }
+        .scanner-box { width: 100%; max-width: 400px; height: 100px; background: rgba(0,0,0,0.3); border: 2px solid rgba(192, 132, 252, 0.3); border-radius: 16px; margin: 0 auto; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+        .scanner-beam { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #c084fc; box-shadow: 0 0 20px 10px rgba(192, 132, 252, 0.5); animation: scan 2s ease-in-out infinite alternate; }
+        @keyframes scan { 0% { transform: translateY(-10px); } 100% { transform: translateY(110px); } }
+        .scanner-text { font-size: 1.3rem; font-weight: 700; color: #c084fc; letter-spacing: 3px; text-transform: uppercase; z-index: 2; text-shadow: 0 0 10px rgba(192, 132, 252, 0.5); animation: pulseOpacity 1.5s infinite; }
         @keyframes pulseOpacity { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
 
         /* Chat UI Styles */
         #chat-ui-container { display: none; }
@@ -316,10 +318,13 @@
         </form>
 
         <div id="loading-screen" style="text-align: center; padding: 40px 20px;">
-            <div class="loader-spinner"></div>
-            <h2 id="loading-title" class="pulse-text" style="color: var(--text-main); margin-top: 25px; font-size: 1.8rem; font-weight: 700;">Analyzing Module...</h2>
-            <p id="loading-subtitle" style="color: var(--text-muted); font-size: 1.1rem;">Extracting key concepts and data points.</p>
-        </div>
+         <div class="scanner-box">
+             <div class="scanner-beam"></div>
+             <div class="scanner-text">PROCESSING</div>
+         </div>
+         <h2 id="loading-title" style="color: var(--text-main); margin-top: 35px; font-size: 1.8rem; font-weight: 700;">Analyzing Module...</h2>
+         <p id="loading-subtitle" style="color: var(--text-muted); font-size: 1.1rem;">Extracting key concepts and data points.</p>
+     </div>
 
         <div id="chat-ui-container">
             <div class="review-header">
@@ -405,7 +410,7 @@
 
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
     // ==========================================
     // 2. AUTHENTICATION LOGIC
