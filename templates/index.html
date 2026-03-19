@@ -288,7 +288,7 @@
     </div>
 
     <div class="glass-card" id="tool-view">
-        <button class="generate-btn ghost-btn" style="width: auto; padding: 8px 15px; margin-bottom: 25px; font-size: 0.9rem;" onclick="closeTool()">← Back to Dashboard</button>
+        <button class="generate-btn ghost-btn" style="width: auto; padding: 8px 15px; margin-bottom: 25px; font-size: 0.9rem;" onclick="resetAppToDashboard()">← Back to Dashboard</button>
         <h2 id="tool-title" style="margin-top: 0; margin-bottom: 25px; text-align: center; color: var(--text-main);">Quiz Generator</h2>
         
         <form id="quizForm">
@@ -336,7 +336,7 @@
                 <input type="text" id="chat-input-box" class="auth-input" placeholder="Type or speak your question..." style="margin-bottom: 0; flex: 1;">
                 <button class="generate-btn" id="send-chat-btn" style="width: auto; margin-top: 0; padding: 0 20px; border-radius: 12px;">Send</button>
             </div>
-            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">End Chat Session</button>
+            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="resetAppToDashboard()">End Chat Session</button>
         </div>
 
         <div id="quiz-container">
@@ -379,7 +379,7 @@
             <p class="result-subtitle" id="result-subtitle"></p>
             <button class="generate-btn" id="retake-btn" onclick="retakeQuiz()">Retake This Test</button>
             <button class="generate-btn ghost-btn" id="review-btn" style="margin-top: 15px;" onclick="showReview()">Review Answers & Insights</button>
-            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="location.reload()">Back to Dashboard</button>
+            <button class="generate-btn secondary" style="margin-top: 15px;" onclick="resetAppToDashboard()">Back to Dashboard</button>
         </div>
 
         <div id="review-container">
@@ -611,11 +611,46 @@
         }
     }
 
-    function closeTool() {
+    // THE SOFT RESET FIX
+    function resetAppToDashboard() {
+        // Hide all tool screens smoothly
         document.getElementById('tool-view').style.display = 'none';
-        document.getElementById('dashboard-view').style.display = 'block';
-        document.getElementById('quizForm').style.display = 'block'; 
         document.getElementById('chat-ui-container').style.display = 'none';
+        document.getElementById('quiz-container').style.display = 'none';
+        document.getElementById('flashcard-container').style.display = 'none';
+        document.getElementById('result-container').style.display = 'none';
+        document.getElementById('review-container').style.display = 'none';
+        
+        // Show the main dashboard
+        document.getElementById('dashboard-view').style.display = 'block';
+        
+        // Clean the upload form completely
+        document.getElementById('quizForm').reset();
+        document.getElementById('quizForm').style.display = 'block';
+        document.querySelector('.ghost-btn').style.display = 'inline-block';
+        
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.style.borderColor = "";
+        dropZone.style.color = "";
+        dropZone.style.borderStyle = "";
+        document.getElementById('file-name-display').innerText = "Drop PDF / PPTX here or click to browse";
+        
+        // Wipe AI memory
+        chatHistory = [];
+        activeFileId = null;
+        document.getElementById('chat-messages').innerHTML = '<div class="chat-bubble ai">Hello! I have read your document. What would you like me to explain?</div>';
+        
+        // Wipe Quiz memory
+        quizData = [];
+        userAnswers = [];
+        currentIndex = 0;
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // This handles the "Back to Dashboard" inside the tool itself
+    function closeTool() {
+        resetAppToDashboard();
     }
 
     const root = document.documentElement;
@@ -758,7 +793,6 @@
     const chatMessages = document.getElementById('chat-messages');
     const micBtn = document.getElementById('mic-btn');
 
-    // Omni-Browser Native Speech Engine
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition;
     
     if (SpeechRecognition) {
@@ -768,7 +802,6 @@
             const recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = false;
-            // Let the browser decide the language, which is vastly more stable globally
             recognition.lang = document.documentElement.lang || navigator.language || 'en-US';
 
             recognition.onstart = () => {
@@ -780,7 +813,7 @@
                 const transcript = event.results[0][0].transcript;
                 chatInputBox.value = transcript;
                 resetMic();
-                sendChatBtn.click(); // Automatically hit the Send button below
+                sendChatBtn.click(); 
             };
 
             recognition.onerror = (event) => {
@@ -811,14 +844,12 @@
             }
         });
     } else {
-        // Fallback for browsers that literally don't have the engine
         micBtn.addEventListener('click', (e) => {
             e.preventDefault();
             alert("Your specific browser entirely blocks native voice features. Please open this app in Chrome, Edge, or Safari to use Voice Ask.");
         });
     }
 
-    // THE FIXED SEND BUTTON LOGIC
     sendChatBtn.addEventListener('click', async () => {
         const message = chatInputBox.value.trim();
         if (!message) return;
@@ -1026,10 +1057,10 @@
     }
 
     // ==========================================
-    // 6. AUTO-LOGOUT SECURE TIMER (3 MINUTES)
+    // 6. AUTO-LOGOUT SECURE TIMER (UPDATED TO 15 MINS)
     // ==========================================
     let inactivityTimer;
-    const timeLimit = 3 * 60 * 1000; 
+    const timeLimit = 15 * 60 * 1000; 
 
     function resetTimer() {
         clearTimeout(inactivityTimer);
@@ -1040,7 +1071,7 @@
 
     function forceLogout() {
         auth.signOut().then(() => {
-            showError("Session expired due to 3 minutes of inactivity. Please sign in again.");
+            showError("Session expired due to 15 minutes of inactivity. Please sign in again.");
             errorBox.style.color = "var(--theme-color)"; 
             setTimeout(() => { errorBox.style.color = "var(--error)"; }, 7000);
         });
