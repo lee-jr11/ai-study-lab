@@ -28,7 +28,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
 
     <!-- Fonts & Libraries -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -878,7 +877,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();   // Firestore for session history
-const storage = firebase.storage();  // Firebase Storage for seamless document resumes
 // Session-only persistence: refreshing or closing the tab ALWAYS requires
 // signing in again — no silent session restore, no dashboard flash.
 auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
@@ -1330,7 +1328,6 @@ let userAnswers = [];
 let currentIndex = 0;
 let activeFileId = null;
 let activeCleanupTicket = null;   // signed token enabling tab-close cleanup beacon
-let activeStoragePath = null;     // path to document in Firebase Storage
 let lastApiToken = null;          // last Firebase ID token used (for post-sign-out cleanup)
 
 document.getElementById('quizForm').addEventListener('submit', async (e) => {
@@ -1350,19 +1347,6 @@ document.getElementById('quizForm').addEventListener('submit', async (e) => {
         fd.append('document', file, 'upload' + ext);
 
         if (isChat) {
-            // Backup the file to Firebase Storage so the chat can be resumed later
-            try {
-                const user = auth.currentUser;
-                if (user) {
-                    const ts = Date.now();
-                    const storageRef = storage.ref(`users/${user.uid}/files/${ts}_${file.name}`);
-                    await storageRef.put(file);
-                    activeStoragePath = `users/${user.uid}/files/${ts}_${file.name}`;
-                }
-            } catch (err) {
-                console.warn('Storage upload failed', err);
-            }
-
             const res  = await apiFetch('/init_chat', { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
@@ -1986,7 +1970,6 @@ async function endChatSession() {
             mode: document.getElementById('generation-mode').value,
             chatHistory: chatHistory.slice(),
             messageCount: chatHistory.filter(m => m.role === 'user').length,
-            storagePath: activeStoragePath
         });
     }
     cleanupActiveChatFile();
@@ -2459,16 +2442,13 @@ function restoreSession(data) {
             banner.className = 'restored-banner';
             banner.innerHTML = '📂 <strong>Restored chat from history</strong> • ' + escapeHtml(data.documentName || 'Unknown');
             
-            if (data.storagePath) {
-                const resumeBtn = document.createElement('button');
-                resumeBtn.className = 'generate-btn';
-                resumeBtn.style.cssText = 'width:auto; margin-left:14px; padding:6px 14px; font-size:0.85rem;';
-                resumeBtn.innerText = 'Resume Chat';
-                resumeBtn.onclick = () => resumeArchivedChat(data.storagePath, data.documentName, banner);
-                banner.appendChild(resumeBtn);
-            } else {
-                banner.innerHTML += ' • Read-only';
-            }
+            const resumeBtn = document.createElement('button');
+            resumeBtn.className = 'generate-btn';
+            resumeBtn.style.cssText = 'width:auto; margin-left:14px; padding:6px 14px; font-size:0.85rem;';
+            resumeBtn.innerText = 'Resume Chat';
+            resumeBtn.onclick = () => promptResumeArchivedChat(data.documentName, banner);
+            banner.appendChild(resumeBtn);
+            
             msgBox.appendChild(banner);
 
             // Replay all messages
@@ -2484,45 +2464,48 @@ function restoreSession(data) {
     }, 80);
 }
 
-// ── Resume a chat from history ──
-async function resumeArchivedChat(storagePath, docName, bannerEl) {
-    const user = auth.currentUser;
-    if (!user) return;
+// ── Resume a chat from history (Manual file selection) ──
+function promptResumeArchivedChat(docName, bannerEl) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.pptx';
+    input.style.display = 'none';
     
-    bannerEl.innerHTML = '📂 <strong>Waking up AI and downloading document...</strong>';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        bannerEl.innerHTML = '📂 <strong>Uploading document to wake up AI...</strong>';
+        
+        try {
+            const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.pdf';
+            const fd = new FormData();
+            fd.append('document', file, docName || 'upload' + ext);
+            
+            const res = await apiFetch('/init_chat', { method: 'POST', body: fd });
+            const resData = await res.json();
+            if (!res.ok) throw new Error(resData.error);
+            
+            activeFileId = resData.file_id;
+            activeCleanupTicket = resData.ct || null;
+            
+            document.getElementById('chat-input-box').disabled  = false;
+            document.getElementById('send-chat-btn').disabled   = false;
+            document.getElementById('mic-btn').disabled         = false;
+            document.getElementById('chat-input-box').placeholder = 'Type or speak your question…';
+            
+            bannerEl.innerHTML = '✅ <strong>Session Resumed!</strong> You can now chat normally.';
+            setTimeout(() => { if (bannerEl.parentNode) bannerEl.remove(); }, 4000);
+        } catch (err) {
+            console.error('Resume error:', err);
+            bannerEl.innerHTML = '❌ <strong>Failed to resume session.</strong>';
+            alert('Could not resume chat: ' + err.message);
+        }
+    };
     
-    try {
-        // 1. Download file from Storage
-        const url = await storage.ref(storagePath).getDownloadURL();
-        const fileRes = await fetch(url);
-        const blob = await fileRes.blob();
-        
-        // 2. Upload to init_chat
-        const ext = storagePath.includes('.') ? storagePath.substring(storagePath.lastIndexOf('.')) : '.pdf';
-        const fd = new FormData();
-        fd.append('document', blob, docName || 'upload' + ext);
-        
-        const res = await apiFetch('/init_chat', { method: 'POST', body: fd });
-        const resData = await res.json();
-        if (!res.ok) throw new Error(resData.error);
-        
-        // 3. Re-enable session
-        activeFileId = resData.file_id;
-        activeCleanupTicket = resData.ct || null;
-        activeStoragePath = storagePath; // keep same path for next save
-        
-        document.getElementById('chat-input-box').disabled  = false;
-        document.getElementById('send-chat-btn').disabled   = false;
-        document.getElementById('mic-btn').disabled         = false;
-        document.getElementById('chat-input-box').placeholder = 'Type or speak your question…';
-        
-        bannerEl.innerHTML = '✅ <strong>Session Resumed!</strong> You can now chat normally.';
-        setTimeout(() => { if (bannerEl.parentNode) bannerEl.remove(); }, 4000);
-    } catch (err) {
-        console.error('Resume error:', err);
-        bannerEl.innerHTML = '❌ <strong>Failed to resume session.</strong>';
-        alert('Could not resume chat: ' + err.message);
-    }
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
 }
 
 // ══════════════════════════════════════════════
