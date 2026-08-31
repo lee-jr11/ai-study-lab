@@ -1,0 +1,8 @@
+Flask
+google-genai
+python-dotenv
+gunicorn
+python-pptx
+flask-limiter
+PyJWT
+cryptography

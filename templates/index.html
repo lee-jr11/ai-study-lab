@@ -1,0 +1,2566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lee's AI Study Lab</title>
+    <meta name="description" content="AI-powered study tool: generate quizzes, flashcards and chat with your lecture notes.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%238aa6ff'/><text x='50%' y='50%' font-family='Outfit,sans-serif' font-size='65' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>L</text></svg>">
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQYZRZN1LZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQYZRZN1LZ');
+    </script>
+
+    <!-- Google Translate (hidden engine) -->
+    <script type="text/javascript">
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({ pageLanguage: 'en', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false }, 'google_translate_element');
+    }
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- Fonts & Libraries -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- DOMPurify: sanitises innerHTML to prevent XSS -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <!-- jsPDF: client-side PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        /* ══════════════════════════════════════════
+           CSS VARIABLES
+        ══════════════════════════════════════════ */
+        :root {
+            --theme-color: #8aa6ff;
+            --success: #10b981; --error: #ef4444; --warn: #f59e0b;
+            --bg-base: #0a1220; --text-main: #edf3ff; --text-muted: #9aa9bf;
+            --glass-bg: rgba(15, 23, 42, 0.8); --glass-border: rgba(148,163,184,0.14);
+            --card-shadow: rgba(2,6,23,0.55); --input-bg: rgba(15,23,42,0.7);
+            --input-border: rgba(148,163,184,0.18); --option-bg: rgba(255,255,255,0.02);
+            --option-border: rgba(148,163,184,0.16); --question-bg: rgba(15,23,42,0.7);
+            --panel-soft: rgba(148,163,184,0.05);
+        }
+        [data-theme="light"] {
+            --theme-color: #5d7ee5;
+            --bg-base: #f4f7fb; --text-main: #182333; --text-muted: #51627a;
+            --glass-bg: rgba(255,255,255,0.8); --glass-border: rgba(15,23,42,0.08);
+            --card-shadow: rgba(15, 23, 42, 0.08); --input-bg: rgba(255,255,255,0.75);
+            --input-border: rgba(15,23,42,0.1); --option-bg: rgba(255,255,255,0.9);
+            --option-border: rgba(15,23,42,0.08); --question-bg: rgba(255,255,255,0.9);
+            --panel-soft: rgba(148,163,184,0.08);
+        }
+
+        /* ══════════════════════════════════════════
+           BASE
+        ══════════════════════════════════════════ */
+        *, *::before, *::after { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0; font-family: 'Outfit', sans-serif;
+            color: var(--text-main); min-height: 100vh; overflow-x: hidden;
+            background:
+                radial-gradient(circle at 15% 18%, rgba(138,166,255,0.18), transparent 18%),
+                radial-gradient(circle at 80% 20%, rgba(125,211,252,0.08), transparent 20%),
+                var(--bg-base);
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+
+        /* ══════════════════════════════════════════
+           LAYOUT
+        ══════════════════════════════════════════ */
+        .container {
+            width: 100%; max-width: 1180px;
+            margin: 80px auto 48px; padding: 0 20px;
+            perspective: 1000px; position: relative; z-index: 10;
+        }
+        #auth-container .glass-card { max-width: 480px; margin: 0 auto; }
+        #auth-container { display: block; }
+        #app-container  { display: none; }
+
+        /* ══════════════════════════════════════════
+           AMBIENT BACKGROUND
+        ══════════════════════════════════════════ */
+        .ambient-bg {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background:
+                radial-gradient(circle at 15% 50%, rgba(138,166,255,0.12), transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(192,132,252,0.12), transparent 50%);
+            z-index: -1; animation: breathe 10s ease-in-out infinite alternate;
+            will-change: transform, opacity;
+        }
+        @keyframes breathe { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.1); opacity: 1; } }
+
+        /* ══════════════════════════════════════════
+           TOP CONTROLS
+        ══════════════════════════════════════════ */
+        .top-controls { position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; }
+        .icon-btn {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            color: var(--text-main); height: 45px; padding: 0 15px;
+            border-radius: 22.5px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--card-shadow);
+            font-family: 'Outfit', sans-serif; font-weight: 500;
+        }
+        .icon-btn:hover { border-color: var(--theme-color); transform: translateY(-2px); }
+        .icon-btn.icon-only { width: 45px; padding: 0; border-radius: 50%; }
+
+        /* ══════════════════════════════════════════
+           GLASS CARD
+        ══════════════════════════════════════════ */
+        .glass-card {
+            background: var(--glass-bg); backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border);
+            border-radius: 28px; padding: 32px;
+            box-shadow: 0 24px 60px -18px var(--card-shadow), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        /* ══════════════════════════════════════════
+           HEADER
+        ══════════════════════════════════════════ */
+        .header { text-align: center; margin-bottom: 40px; pointer-events: none; }
+        .header h1 { font-size: 3.2rem; margin: 0 0 5px 0; font-weight: 700; letter-spacing: -1px; }
+        .header h1 .ai-text {
+            background: linear-gradient(to right, var(--theme-color), #c084fc);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        /* ══════════════════════════════════════════
+           FADE-IN TRANSITION
+        ══════════════════════════════════════════ */
+        .fade-in { animation: fadeSlideIn 0.35s ease both; }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ══════════════════════════════════════════
+           DASHBOARD CARDS
+        ══════════════════════════════════════════ */
+        .dash-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr));
+            gap: 22px; margin-bottom: 10px; align-items: stretch;
+        }
+        .dash-card {
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015));
+            border: 1px solid var(--glass-border);
+            padding: 26px 22px; border-radius: 22px; cursor: pointer;
+            transition: all 0.3s ease; text-align: left;
+            display: flex; flex-direction: column; gap: 12px;
+            position: relative; overflow: hidden;
+            box-shadow: 0 18px 36px -20px var(--card-shadow);
+        }
+        .dash-card::after {
+            content: ''; position: absolute; left: 0; top: 0;
+            width: 4px; height: 100%; border-radius: 18px 0 0 18px;
+            background: var(--card-accent); opacity: 0.85;
+            transition: opacity 0.3s;
+        }
+        .dash-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 22px 45px -22px rgba(0,0,0,0.55), 0 0 0 1px var(--card-accent);
+            border-color: rgba(255,255,255,0.12);
+        }
+        .dash-card:hover::after { opacity: 1; }
+        .dash-card[data-tool="quiz"]      { --card-accent: #8aa6ff; }
+        .dash-card[data-tool="flashcard"] { --card-accent: #c084fc; }
+        .dash-card[data-tool="chat"]      { --card-accent: #10b981; }
+        .dash-card[data-tool="voice"]     { --card-accent: #f59e0b; }
+        .dash-icon {
+            font-size: 1.8rem; width: 52px; height: 52px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 14px; border: 1px solid var(--option-border);
+            background: rgba(255,255,255,0.04);
+        }
+        .dash-card h3 { margin: 0; font-size: 1.2rem; color: var(--text-main); font-weight: 700; }
+        .dash-card p  { margin: 0; font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; }
+        #tool-view { display: none; }
+        #app-container {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+        #dashboard-view {
+            margin-top: 20px;
+        }
+
+        /* ══════════════════════════════════════════
+           AUTH FORM
+        ══════════════════════════════════════════ */
+        .auth-input {
+            width: 100%; padding: 15px; background: var(--input-bg);
+            border: 1px solid var(--input-border); border-radius: 12px;
+            color: var(--text-main); font-size: 1.05rem; font-family: inherit;
+            outline: none; margin-bottom: 15px; transition: border-color 0.3s ease;
+        }
+        .auth-input:focus { border-color: var(--theme-color); }
+        .auth-divider { display: flex; align-items: center; text-align: center; margin: 20px 0; color: var(--text-muted); font-size: 0.9rem; }
+        .auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--input-border); }
+        .auth-divider::before { margin-right: .5em; } .auth-divider::after { margin-left: .5em; }
+        .auth-error { color: var(--error); text-align: center; margin-bottom: 15px; font-size: 0.9rem; display: none; }
+
+        /* Password strength */
+        .pw-strength-bar  { height: 4px; border-radius: 2px; margin: -8px 0 12px; transition: all 0.4s; background: var(--input-border); display: none; }
+        .pw-strength-text { font-size: 0.78rem; margin: -8px 0 12px; display: none; }
+        .pw-strength-bar.weak, .pw-strength-text.weak   { background: var(--error);   color: var(--error);   }
+        .pw-strength-bar.weak  { width: 33%; }
+        .pw-strength-bar.med,  .pw-strength-text.med    { background: var(--warn);    color: var(--warn);    }
+        .pw-strength-bar.med   { width: 66%; }
+        .pw-strength-bar.strong,.pw-strength-text.strong{ background: var(--success); color: var(--success); }
+        .pw-strength-bar.strong{ width: 100%; }
+
+        /* ══════════════════════════════════════════
+           BUTTONS
+        ══════════════════════════════════════════ */
+        button.generate-btn {
+            width: 100%; background: linear-gradient(135deg, var(--theme-color), rgba(125,211,252,0.9));
+            color: #0b1020; border: none; padding: 17px 18px; border-radius: 14px; font-size: 1.04rem;
+            font-weight: 700; letter-spacing: 0.5px; cursor: pointer;
+            box-shadow: 0 16px 28px -16px rgba(138,166,255,0.6); position: relative;
+            overflow: hidden; margin-top: 10px; transition: all 0.25s ease;
+            font-family: 'Outfit', sans-serif;
+        }
+        button.generate-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 30px -16px rgba(138,166,255,0.7); }
+        button:disabled { background: var(--input-border) !important; color: var(--text-muted) !important; cursor: not-allowed; box-shadow: none !important; transform: none !important; }
+        button.ghost-btn { background: transparent; border: 1px solid var(--theme-color); color: var(--theme-color); box-shadow: none; }
+        button.ghost-btn:hover:not(:disabled) { background: rgba(138,166,255,0.1); }
+        button.google-btn { background: white; color: #444; border: 1px solid #ddd; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        button.google-btn:hover { background: #f8f8f8; transform: scale(1.02); }
+        button.danger-ghost { background: transparent; border: 1px solid var(--error); color: var(--error); box-shadow: none; }
+        button.danger-ghost:hover:not(:disabled) { background: rgba(239,68,68,0.1); }
+        .skip-btn {
+            background: transparent; border: none; color: var(--text-muted);
+            font-size: 0.85rem; cursor: pointer; padding: 6px 12px;
+            border-radius: 8px; font-family: 'Outfit', sans-serif;
+            transition: all 0.2s; margin-left: auto;
+        }
+        .skip-btn:hover { color: var(--text-main); background: var(--option-bg); }
+
+        /* ══════════════════════════════════════════
+           FORM GROUPS
+        ══════════════════════════════════════════ */
+        .form-group { margin-bottom: 28px; }
+        .label-wrap { display: flex; align-items: center; margin-bottom: 12px; font-weight: 500; color: var(--text-muted); }
+        .label-wrap svg { width: 18px; height: 18px; margin-right: 8px; stroke: var(--theme-color); flex-shrink: 0; }
+        input[type="file"] { display: none; }
+        .file-upload-label {
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            width: 100%; padding: 34px 20px; background: var(--panel-soft);
+            border: 1.5px dashed var(--input-border); border-radius: 18px;
+            color: var(--text-muted); cursor: pointer; font-size: 1rem;
+            text-align: center; transition: all 0.3s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+        .file-upload-label:hover { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); }
+        /* Highlight while a dragged file hovers over the zone */
+        .file-upload-label.drag-over { border-color: var(--theme-color); border-style: solid; color: var(--theme-color); background: rgba(138,166,255,0.08); box-shadow: 0 0 0 1px rgba(138,166,255,0.2), 0 12px 30px -18px rgba(138,166,255,0.5); }
+
+        /* Copy buttons (active-question header & review blocks) */
+        .copy-btn { background: transparent; border: 1px solid var(--option-border); color: var(--text-muted); width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; padding: 0; }
+        .copy-btn:hover { border-color: var(--theme-color); color: var(--theme-color); }
+        .copy-btn.copied { border-color: var(--success); color: var(--success); }
+        .question-header .copy-btn { margin-left: 12px; }
+        .review-block { position: relative; }
+        .review-block .copy-btn { position: absolute; top: 14px; right: 14px; }
+        .slider-container { position: relative; width: 100%; padding: 10px 0; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; outline: none; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: var(--theme-color); margin-top: -7px; cursor: pointer; box-shadow: 0 0 12px var(--theme-color); }
+        .slider-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+        .slider-labels span.active { color: var(--text-main); font-weight: 700; }
+        .timer-option { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px; color: var(--text-main); cursor: pointer; }
+        .timer-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--theme-color); cursor: pointer; }
+        .timer-option-text { display: flex; flex-direction: column; gap: 3px; }
+        .timer-option-text small { color: var(--text-muted); font-size: 0.82rem; }
+        .timer-duration { display: none; margin-top: 12px; }
+        .timer-duration label { display: block; margin-bottom: 7px; color: var(--text-muted); font-size: 0.85rem; font-weight: 500; }
+        .timer-duration select { width: 100%; padding: 12px 14px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 10px; color: var(--text-main); font: inherit; }
+        input[type="number"] { width: 100%; padding: 15px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px; color: var(--text-main); font-size: 1.05rem; font-family: inherit; outline: none; }
+        input[type="number"]:focus { border-color: var(--theme-color); }
+        .input-helper { margin: 6px 0 0; font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ══════════════════════════════════════════
+           FULL-BLACK LASER LOADER
+        ══════════════════════════════════════════ */
+        #full-black-loader { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; overflow: hidden; }
+        .laser-beam { position: absolute; left: 0; width: 100%; height: 6px; background: #c084fc; box-shadow: 0 0 35px 20px rgba(192,132,252,0.7); animation: scanScreen 2s linear infinite alternate; z-index: 10; }
+        @keyframes scanScreen { 0% { top: 0; } 100% { top: 100%; } }
+        .floating-word { position: absolute; color: rgba(192,132,252,0.8); font-size: 1.7rem; font-weight: 700; font-family: 'Outfit', sans-serif; opacity: 0; animation: floatUp 3s linear forwards; text-shadow: 0 0 15px rgba(192,132,252,0.5); letter-spacing: 2px; }
+        @keyframes floatUp { 0% { transform: translateY(50px) scale(0.8); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(-50px) scale(1.1); opacity: 0; } }
+
+        /* ══════════════════════════════════════════
+           QUIZ
+        ══════════════════════════════════════════ */
+        #quiz-container, #result-container, #review-container { display: none; }
+        .progress-wrapper { margin-bottom: 24px; }
+        .progress-bar-bg { width: 100%; height: 6px; background: var(--input-border); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--theme-color); width: 0; transition: width 0.4s ease; }
+        .progress-text { margin-top: 10px; font-size: 0.88rem; color: var(--text-muted); font-weight: 500; display: flex; justify-content: space-between; }
+
+        /* Per-question timer bar */
+        .timer-bar-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .timer-bar-bg { flex: 1; height: 4px; background: var(--input-border); border-radius: 2px; overflow: hidden; }
+        .timer-bar-fill { height: 100%; background: var(--theme-color); transition: width 1s linear; border-radius: 2px; width: 100%; }
+        .timer-text { font-size: 0.82rem; font-weight: 700; color: var(--text-muted); min-width: 30px; text-align: right; }
+        .timer-bar-wrapper.danger .timer-bar-fill { background: var(--error); }
+        .timer-bar-wrapper.danger .timer-text { color: var(--error); }
+        .timer-timeout-notice { display: none; margin: -6px 0 16px; color: var(--error); font-size: 0.9rem; font-weight: 700; text-align: center; }
+
+        .question-header { display: flex; align-items: center; margin-bottom: 18px; }
+        .question-text { font-size: 1.25rem; line-height: 1.5; font-weight: 500; flex: 1; }
+        .option-btn { display: flex; align-items: center; width: 100%; text-align: left; background: var(--option-bg); border: 1px solid var(--option-border); color: var(--text-main); padding: 13px 16px; border-radius: 12px; margin-bottom: 12px; cursor: pointer; font-size: 1rem; transition: all 0.2s ease; font-family: 'Outfit', sans-serif; }
+        .option-label { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; background: var(--input-bg); border: 1px solid var(--option-border); border-radius: 8px; margin-right: 14px; font-weight: 700; font-size: 0.95rem; color: var(--text-muted); transition: all 0.2s; }
+        .option-btn.selected { border-color: var(--theme-color); box-shadow: 0 0 12px rgba(138,166,255,0.2); transform: translateX(5px); }
+        .option-btn.selected .option-label { background: var(--theme-color); color: #020617; border-color: var(--theme-color); }
+        .nav-buttons { display: flex; gap: 12px; margin-top: 24px; align-items: center; }
+        .nav-btn { flex: 1; }
+        .nav-btn.secondary { background: var(--input-bg); color: var(--text-main); box-shadow: none; border: 1px solid var(--option-border); }
+
+        /* ══════════════════════════════════════════
+           RESULTS & REVIEW
+        ══════════════════════════════════════════ */
+        .result-icon { font-size: 4rem; display: inline-block; margin-bottom: 10px; }
+        .result-title { font-size: 2.3rem; margin: 0 0 10px 0; }
+        .result-score { font-size: 4.5rem; font-weight: 700; color: var(--theme-color); line-height: 1; margin: 18px 0; }
+        .result-subtitle { font-size: 1.05rem; color: var(--text-muted); margin-bottom: 35px; }
+        .review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--glass-border); }
+        .review-block { background: var(--question-bg); padding: 22px; border-radius: 16px; border: 1px solid var(--option-border); margin-bottom: 18px; text-align: left; }
+        .review-q { font-size: 1.1rem; font-weight: 500; margin-bottom: 14px; color: var(--text-main); line-height: 1.5; }
+        .review-ans { font-size: 0.95rem; margin-bottom: 8px; padding: 11px 15px; border-radius: 8px; font-weight: 500; }
+        .review-ans.correct { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2); }
+        .review-ans.wrong   { background: rgba(239,68,68,0.1); color: var(--error); border: 1px solid rgba(239,68,68,0.2); }
+        .review-ans.skipped { background: rgba(148,163,184,0.1); color: var(--text-muted); border: 1px solid rgba(148,163,184,0.2); }
+        .ai-insight { background: rgba(138,166,255,0.05); border-left: 4px solid var(--theme-color); padding: 14px 18px; margin-top: 14px; border-radius: 0 8px 8px 0; font-size: 0.92rem; color: var(--text-muted); line-height: 1.6; }
+        .ai-insight strong { color: var(--theme-color); font-weight: 600; display: block; margin-bottom: 4px; }
+
+        /* ══════════════════════════════════════════
+           FLASHCARDS (Improved)
+        ══════════════════════════════════════════ */
+        #flashcard-container { display: none; }
+        .fc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .fc-stats { display: flex; gap: 16px; font-size: 0.88rem; font-weight: 600; }
+        .fc-knew     { color: var(--success); }
+        .fc-learning { color: var(--error); }
+        .fc-remaining{ color: var(--text-muted); }
+        .shuffle-btn {
+            background: transparent; border: 1px solid var(--option-border);
+            color: var(--text-muted); padding: 6px 14px; border-radius: 8px;
+            cursor: pointer; font-family: 'Outfit', sans-serif; font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .shuffle-btn:hover { border-color: var(--theme-color); color: var(--theme-color); }
+        .flashcard-scene { width: 100%; height: 320px; perspective: 1200px; cursor: pointer; margin-bottom: 20px; }
+        .flashcard-inner { width: 100%; height: 100%; position: relative; transition: transform 0.55s cubic-bezier(0.4,0.2,0.2,1); transform-style: preserve-3d; }
+        .flashcard-inner.is-flipped { transform: rotateY(180deg); }
+        .flashcard-front, .flashcard-back {
+            position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 36px; background: var(--input-bg); border-radius: 20px;
+            text-align: center; box-shadow: 0 15px 35px var(--card-shadow);
+        }
+        .flashcard-front { border: 2px solid var(--theme-color); }
+        .flashcard-back  { transform: rotateY(180deg); background: var(--glass-bg); border: 2px solid var(--success); }
+        .flashcard-front h3 { font-size: 2rem; margin: 0; color: var(--text-main); line-height: 1.3; }
+        .flashcard-back  p  { font-size: 1.3rem; margin: 0; color: var(--text-main); line-height: 1.6; }
+        .flip-hint { font-size: 0.85rem; color: var(--text-muted); position: absolute; bottom: 18px; font-weight: 500; opacity: 0.6; }
+        .fc-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 14px; }
+        .flashcard-front .fc-label { color: var(--theme-color); }
+        .flashcard-back  .fc-label { color: var(--success); }
+        /* Rating buttons (appear after flip) */
+        .fc-action-btns { display: none; gap: 12px; margin-top: 8px; }
+        .fc-know-btn {
+            flex: 1; background: rgba(16,185,129,0.1); border: 2px solid var(--success);
+            color: var(--success); border-radius: 12px; padding: 14px;
+            font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: all 0.25s;
+        }
+        .fc-know-btn:hover { background: rgba(16,185,129,0.2); box-shadow: 0 0 18px rgba(16,185,129,0.3); transform: translateY(-2px); }
+        .fc-learn-btn {
+            flex: 1; background: rgba(239,68,68,0.1); border: 2px solid var(--error);
+            color: var(--error); border-radius: 12px; padding: 14px;
+            font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: all 0.25s;
+        }
+        .fc-learn-btn:hover { background: rgba(239,68,68,0.2); box-shadow: 0 0 18px rgba(239,68,68,0.3); transform: translateY(-2px); }
+
+        /* ══════════════════════════════════════════
+           CHAT
+        ══════════════════════════════════════════ */
+        #chat-ui-container { display: none; }
+        .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+        .chat-header h2 { margin: 0; font-size: 1.25rem; color: var(--text-main); }
+        .chat-header-actions { display: flex; gap: 8px; align-items: center; }
+        .chat-messages {
+            height: 420px; overflow-y: auto; background: var(--input-bg);
+            border: 1px solid var(--input-border); border-radius: 16px;
+            padding: 18px; margin-bottom: 18px; display: flex;
+            flex-direction: column; gap: 14px;
+            scrollbar-width: thin; scrollbar-color: var(--input-border) transparent;
+        }
+        .chat-bubble {
+            max-width: 88%; padding: 12px 16px; border-radius: 16px;
+            font-size: 1rem; line-height: 1.55; color: var(--text-main);
+        }
+        .chat-bubble.ai {
+            align-self: flex-start; background: rgba(138,166,255,0.08);
+            border: 1px solid rgba(138,166,255,0.25); border-bottom-left-radius: 4px;
+        }
+        .chat-bubble.user {
+            align-self: flex-end; background: var(--theme-color);
+            color: #020617; border-bottom-right-radius: 4px; font-weight: 500;
+        }
+        .msg-timestamp { font-size: 0.68rem; color: var(--text-muted); opacity: 0.55; margin-top: 5px; display: block; }
+        .chat-bubble.user .msg-timestamp { color: rgba(2,6,23,0.6); }
+        /* Typing indicator */
+        .typing-indicator { display: flex; gap: 5px; align-items: center; padding: 4px 2px; }
+        .typing-dot { width: 8px; height: 8px; background: var(--text-muted); border-radius: 50%; animation: typingBounce 1.4s ease-in-out infinite; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingBounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-8px); } }
+        .chat-input-wrapper { display: flex; gap: 10px; align-items: center; }
+        /* TTS button */
+        .tts-btn { flex-shrink: 0; }
+        .tts-btn.active { background: rgba(138,166,255,0.15) !important; border-color: var(--theme-color) !important; color: var(--theme-color) !important; animation: ttsGlow 1.5s ease-in-out infinite; }
+        @keyframes ttsGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(138,166,255,0.4); } 50% { box-shadow: 0 0 0 8px rgba(138,166,255,0); } }
+
+        /* ══════════════════════════════════════════
+           MIC BUTTON
+        ══════════════════════════════════════════ */
+        @keyframes micPulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
+        .mic-active { animation: micPulse 1.5s infinite; background: rgba(239,68,68,0.1) !important; border-color: var(--error) !important; color: var(--error) !important; }
+
+        /* ══════════════════════════════════════════
+           FX OVERLAY
+        ══════════════════════════════════════════ */
+        #fx-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; opacity: 0; transition: opacity 0.3s; }
+        .flash-red-fx   { animation: pulseRed 2s ease-in-out; }
+        .flash-green-fx { animation: pulseGreen 3s ease-in-out; }
+        @keyframes pulseRed   { 0%,100% { box-shadow: inset 0 0 0 rgba(239,68,68,0); opacity: 0; } 20%,60% { box-shadow: inset 0 0 100px 30px rgba(239,68,68,0.7); opacity: 1; } 40%,80% { box-shadow: inset 0 0 50px 15px rgba(239,68,68,0.4); opacity: 1; } }
+        @keyframes pulseGreen { 0%,100% { box-shadow: inset 0 0 0 rgba(16,185,129,0); opacity: 0; } 50%  { box-shadow: inset 0 0 120px 30px rgba(16,185,129,0.6); opacity: 1; } }
+        .screen-shake { animation: shakeScreen 0.6s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shakeScreen { 10%,90% { transform: translate3d(-4px,0,0); } 20%,80% { transform: translate3d(6px,0,0); } 30%,50%,70% { transform: translate3d(-10px,0,0); } 40%,60% { transform: translate3d(10px,0,0); } }
+
+        /* ══════════════════════════════════════════
+           LANGUAGE SELECTOR
+        ══════════════════════════════════════════ */
+        #google_translate_element { position: absolute; left: -9999px; opacity: 0; pointer-events: none; }
+        .goog-te-banner-frame.skiptranslate { display: none !important; }
+        body { top: 0 !important; }
+        .custom-lang-selector { position: relative; display: inline-block; }
+        .lang-dropdown { position: absolute; top: 55px; right: 0; background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 10px; width: 145px; box-shadow: 0 10px 30px var(--card-shadow); display: none; z-index: 1000; flex-direction: column; gap: 5px; }
+        .lang-option { padding: 10px 15px; cursor: pointer; border-radius: 8px; font-size: 0.92rem; color: var(--text-main); font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between; }
+        .lang-option:hover { background: rgba(138,166,255,0.15); color: var(--theme-color); transform: translateX(4px); }
+
+        /* ══════════════════════════════════════════
+           RESPONSIVE
+        ══════════════════════════════════════════ */
+        @media (max-width: 768px) {
+            .container { perspective: none; }
+            .glass-card { padding: 24px; }
+            .header h1 { font-size: 2.4rem; }
+            .ambient-bg { animation: none; }
+            .fc-action-btns { flex-direction: column; }
+            .dash-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ══════════════════════════════════════════
+           HISTORY PANEL
+        ══════════════════════════════════════════ */
+        .history-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 500;
+            backdrop-filter: blur(3px);
+        }
+        .history-panel {
+            position: fixed; top: 0; right: -420px; width: 420px; max-width: 96vw;
+            height: 100vh; background: var(--glass-bg);
+            border-left: 1px solid var(--glass-border);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            z-index: 501; display: flex; flex-direction: column;
+            transition: right 0.35s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: -16px 0 48px rgba(2,6,23,0.5);
+        }
+        .history-panel.open { right: 0; }
+        .history-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 22px 24px 18px; border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+        .history-panel-header h2 { margin: 0; font-size: 1.2rem; color: var(--text-main); }
+        .history-close-btn {
+            background: transparent; border: 1px solid var(--glass-border);
+            color: var(--text-muted); width: 36px; height: 36px; border-radius: 50%;
+            cursor: pointer; font-size: 1.1rem; display: flex; align-items: center;
+            justify-content: center; transition: all 0.2s;
+        }
+        .history-close-btn:hover { border-color: var(--theme-color); color: var(--theme-color); }
+        .history-list {
+            flex: 1; overflow-y: auto; padding: 16px;
+            scrollbar-width: thin; scrollbar-color: var(--input-border) transparent;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .history-empty {
+            text-align: center; color: var(--text-muted); font-size: 0.95rem;
+            margin-top: 60px; line-height: 1.6;
+        }
+        .history-item {
+            background: var(--input-bg); border: 1px solid var(--option-border);
+            border-radius: 14px; padding: 14px 16px; cursor: pointer;
+            transition: all 0.2s ease; position: relative; overflow: hidden;
+        }
+        .history-item::before {
+            content: ''; position: absolute; left: 0; top: 0;
+            width: 3px; height: 100%; border-radius: 14px 0 0 14px;
+            background: var(--item-accent);
+        }
+        .history-item:hover {
+            border-color: var(--item-accent);
+            transform: translateX(-3px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .history-item[data-type="quiz"]      { --item-accent: #8aa6ff; }
+        .history-item[data-type="flashcard"] { --item-accent: #c084fc; }
+        .history-item[data-type="chat"]      { --item-accent: #10b981; }
+        .history-item[data-type="voice"]     { --item-accent: #f59e0b; }
+        .history-item-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .history-badge {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 0.8px;
+            text-transform: uppercase; padding: 3px 8px; border-radius: 6px;
+            background: rgba(255,255,255,0.06); color: var(--item-accent);
+            border: 1px solid var(--item-accent); flex-shrink: 0;
+        }
+        .history-doc { font-size: 0.88rem; font-weight: 600; color: var(--text-main); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-meta { font-size: 0.78rem; color: var(--text-muted); }
+        .history-score { font-size: 0.82rem; font-weight: 700; color: var(--item-accent); margin-top: 4px; }
+        .history-delete-btn {
+            position: absolute; top: 10px; right: 10px;
+            background: transparent; border: none; color: var(--text-muted);
+            cursor: pointer; font-size: 0.85rem; opacity: 0;
+            transition: opacity 0.2s; padding: 4px 6px; border-radius: 6px;
+        }
+        .history-item:hover .history-delete-btn { opacity: 1; }
+        .history-delete-btn:hover { color: var(--error); background: rgba(239,68,68,0.1); }
+        /* Restored session read-only banner */
+        .restored-banner {
+            background: rgba(138,166,255,0.08); border: 1px solid rgba(138,166,255,0.25);
+            border-radius: 12px; padding: 10px 14px; font-size: 0.85rem;
+            color: var(--text-muted); margin-bottom: 16px; text-align: center;
+        }
+        .restored-banner strong { color: var(--theme-color); }
+    </style>
+</head>
+<body>
+
+<div id="fx-overlay"></div>
+<div id="full-black-loader"><div class="laser-beam"></div></div>
+
+<!-- TOP CONTROLS -->
+<div class="top-controls">
+    <div id="google_translate_element"></div>
+    <div class="custom-lang-selector">
+        <button class="icon-btn icon-only" id="langToggle" aria-label="Change Language">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/></svg>
+        </button>
+        <div class="lang-dropdown" id="langDropdown">
+            <div class="lang-option" data-lang="en">English <span>🇬🇧</span></div>
+            <div class="lang-option" data-lang="fr">Français <span>🇫🇷</span></div>
+            <div class="lang-option" data-lang="es">Español <span>🇪🇸</span></div>
+            <div class="lang-option" data-lang="de">Deutsch <span>🇩🇪</span></div>
+            <div class="lang-option" data-lang="zh-CN">中文 <span>🇨🇳</span></div>
+            <div class="lang-option" data-lang="ar">العربية <span>🇸🇦</span></div>
+        </div>
+    </div>
+    <button class="icon-btn" id="logoutBtn" style="display:none;" onclick="handleLogout()">Sign Out</button>
+    <button class="icon-btn icon-only" id="themeToggle" aria-label="Toggle Theme">
+        <svg id="themeIcon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:20px;height:20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+    </button>
+</div>
+
+<div class="ambient-bg"></div>
+
+<!-- ══════════════ AUTH ══════════════ -->
+<div class="container" id="auth-container">
+    <div class="header">
+        <h1>Lee's <span class="ai-text">Study</span> Lab</h1>
+        <p id="auth-subtitle" style="color:var(--text-muted);">Sign in to access the generator.</p>
+    </div>
+    <div class="glass-card">
+        <div class="auth-error" id="auth-error"></div>
+        <form id="authForm">
+            <div id="signup-fields" style="display:none;">
+                <input type="text" id="auth-firstname" class="auth-input" placeholder="First Name">
+                <input type="text" id="auth-lastname"  class="auth-input" placeholder="Last Name">
+                <input type="text" id="auth-nickname"  class="auth-input" placeholder="Nickname (Optional)">
+            </div>
+            <input type="email" id="auth-email" class="auth-input" placeholder="Email Address" required>
+            <div style="position:relative;margin-bottom:0;">
+                <input type="password" id="auth-password" class="auth-input" placeholder="Password" required style="margin-bottom:0;padding-right:48px;">
+                <span id="togglePassword" style="position:absolute;right:15px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted);">
+                    <svg id="eye-icon" style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                </span>
+            </div>
+            <!-- Password strength (signup only) -->
+            <div id="pw-strength-bar"  class="pw-strength-bar"></div>
+            <div id="pw-strength-text" class="pw-strength-text"></div>
+
+            <div style="text-align:right;margin-bottom:15px;margin-top:10px;">
+                <span onclick="triggerPasswordReset()" style="color:var(--theme-color);font-size:0.85rem;cursor:pointer;font-weight:500;">Forgot Password?</span>
+            </div>
+            <button type="submit" class="generate-btn" id="auth-submit-btn">Sign In</button>
+        </form>
+        <div class="auth-switch" onclick="toggleAuthMode()" style="cursor:pointer;margin-top:20px;text-align:center;">
+            <span id="auth-mode-text"   style="color:var(--text-muted);font-size:0.95rem;">Don't have an account? </span>
+            <span id="auth-mode-toggle" style="color:var(--theme-color);font-weight:700;font-size:0.95rem;">Sign Up</span>
+        </div>
+        <div class="auth-divider">OR</div>
+        <button class="generate-btn google-btn" onclick="handleGoogleLogin()">
+            <svg width="22" height="22" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continue with Google
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════ APP ══════════════ -->
+<div class="container" id="app-container">
+    <div class="header" id="main-header">
+        <h1>Lee's <span class="ai-text">AI</span> Lab</h1>
+        <p id="welcome-text" style="color:var(--theme-color);font-weight:500;font-size:1.15rem;margin-top:5px;"></p>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard-view">
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:14px;">
+            <button class="icon-btn" id="historyBtn" onclick="openHistoryPanel()" style="gap:8px;">
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/></svg>
+                My History
+            </button>
+        </div>
+        <div class="dash-grid">
+            <div class="dash-card" data-tool="quiz" onclick="openTool('quiz')">
+                <div class="dash-icon">📋</div>
+                <h3>Quiz Generator</h3>
+                <p>AI-generated MCQs with timer, skip & full review</p>
+            </div>
+            <div class="dash-card" data-tool="flashcard" onclick="openTool('flashcard')">
+                <div class="dash-icon">📚</div>
+                <h3>Flashcard Generator</h3>
+                <p>Flip cards, rate yourself, master what you missed</p>
+            </div>
+            <div class="dash-card" data-tool="chat" onclick="openTool('chat')">
+                <div class="dash-icon">💬</div>
+                <h3>Chat &amp; Learn</h3>
+                <p>Ask your document anything, get instant answers</p>
+            </div>
+            <div class="dash-card" data-tool="voice" onclick="openTool('voice')">
+                <div class="dash-icon">🎤</div>
+                <h3>Voice Ask</h3>
+                <p>Speak your question — AI reads the answer aloud</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOOL VIEW -->
+    <div class="glass-card" id="tool-view">
+        <button class="generate-btn ghost-btn" style="width:auto;padding:8px 18px;margin-bottom:22px;font-size:0.88rem;" onclick="resetAppToDashboard()">← Back</button>
+        <h2 id="tool-title" style="margin:0 0 24px;text-align:center;color:var(--text-main);">Quiz Generator</h2>
+
+        <!-- UPLOAD FORM -->
+        <form id="quizForm">
+            <input type="hidden" id="generation-mode" name="mode" value="quiz">
+            <div class="form-group">
+                <div class="label-wrap">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
+                    Upload Module
+                </div>
+                <label class="file-upload-label" id="drop-zone" for="document">
+                    <span id="file-name-display">Drop PDF / PPTX here or click to browse</span>
+                    <span style="font-size:0.82rem;color:var(--text-muted);margin-top:8px;">(Max 10 MB · Text-based files work best)</span>
+                </label>
+                <input type="file" id="document" name="document" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+            </div>
+            <div class="form-group" id="difficulty-group">
+                <div class="label-wrap">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Intelligence Level
+                </div>
+                <div class="slider-container">
+                    <input type="range" id="difficulty-slider" min="1" max="3" value="2">
+                    <input type="hidden" id="difficulty-hidden" name="difficulty" value="medium">
+                    <div class="slider-labels">
+                        <span id="lbl-1">Basic</span>
+                        <span id="lbl-2" class="active">Intermediate</span>
+                        <span id="lbl-3">Genius Mode</span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group" id="timer-group">
+                <div class="label-wrap">Quiz Timing</div>
+                <label class="timer-option" for="timer-enabled">
+                    <input type="checkbox" id="timer-enabled">
+                    <span class="timer-option-text">
+                        <strong>Timed quiz</strong>
+                        <small>Set a time limit for each question</small>
+                    </span>
+                </label>
+                <div class="timer-duration" id="timer-duration-group">
+                    <label for="timer-duration">Time per question</label>
+                    <select id="timer-duration">
+                        <option value="30">30 seconds</option>
+                        <option value="45">45 seconds</option>
+                        <option value="60" selected>60 seconds</option>
+                        <option value="90">90 seconds</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group" id="target-output-group">
+                <div class="label-wrap" id="target-output-label">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+                    Target Output
+                </div>
+                <input type="number" id="num_questions" name="num_questions" value="10" min="1" max="30" required>
+                <p class="input-helper">Max: 30</p>
+            </div>
+            <button type="submit" class="generate-btn" id="submitBtn">GENERATE</button>
+        </form>
+
+        <!-- CHAT UI -->
+        <div id="chat-ui-container">
+            <div class="chat-header">
+                <h2>AI Tutor Session</h2>
+                <div class="chat-header-actions">
+                    <button class="icon-btn icon-only tts-btn" id="tts-toggle-btn" title="Toggle voice response (TTS)" onclick="toggleTTS()">🔊</button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-bubble ai">Hello! I've read your document. What would you like me to explain?</div>
+            </div>
+            <div class="chat-input-wrapper">
+                <button id="mic-btn" class="icon-btn icon-only" style="background:var(--input-bg);border-color:var(--input-border);color:var(--theme-color);" title="Use Microphone">
+                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:22px;height:22px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
+                </button>
+                <input type="text" id="chat-input-box" class="auth-input" placeholder="Type or speak your question…" style="margin-bottom:0;flex:1;">
+                <button class="generate-btn" id="send-chat-btn" style="width:auto;margin-top:0;padding:0 22px;border-radius:12px;">Send</button>
+            </div>
+            <button class="generate-btn danger-ghost" style="margin-top:14px;" onclick="endChatSession()">End Chat Session</button>
+        </div>
+
+        <!-- QUIZ CONTAINER -->
+        <div id="quiz-container">
+            <div class="progress-wrapper">
+                <div class="progress-bar-bg"><div class="progress-fill" id="progress-fill"></div></div>
+                <div class="progress-text"><span id="progress-count"></span><span id="progress-percent"></span></div>
+            </div>
+            <!-- Timer bar (shown on medium/hard) -->
+            <div class="timer-bar-wrapper" id="timer-wrapper" style="display:none;">
+                <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-fill"></div></div>
+                <span class="timer-text" id="timer-text">60s</span>
+            </div>
+            <p class="timer-timeout-notice" id="timer-timeout-notice" role="status" aria-live="polite">Time's up — that question was marked unanswered.</p>
+            <div class="question-header">
+                <div class="question-text" id="q-text">Loading…</div>
+                <button class="copy-btn" id="q-copy-btn" title="Copy this question" onclick="copyCurrentQuestion()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+            </div>
+            <div id="q-options"></div>
+            <div class="nav-buttons">
+                <button class="generate-btn nav-btn secondary" id="prevBtn" style="display:none;">← Back</button>
+                <button class="generate-btn nav-btn" id="nextBtn" disabled>Next →</button>
+                <button class="generate-btn nav-btn" id="submitQuizBtn" style="display:none;" disabled>Submit Test</button>
+                <button class="skip-btn" id="skipBtn" onclick="skipQuestion()">Skip ⤑</button>
+            </div>
+        </div>
+
+        <!-- FLASHCARD CONTAINER -->
+        <div id="flashcard-container">
+            <div class="fc-header">
+                <div class="fc-stats">
+                    <span class="fc-knew"     id="fc-knew-count">✓ 0 Known</span>
+                    <span class="fc-learning" id="fc-learn-count">✗ 0 Still Learning</span>
+                    <span class="fc-remaining"id="fc-remaining"></span>
+                </div>
+                <button class="shuffle-btn" onclick="shuffleDeck()">🔀 Shuffle</button>
+            </div>
+            <div class="progress-wrapper">
+                <div class="progress-bar-bg"><div class="progress-fill" id="fc-progress-fill"></div></div>
+                <div class="progress-text"><span id="fc-progress-count"></span></div>
+            </div>
+            <div class="flashcard-scene" onclick="flipCard()">
+                <div class="flashcard-inner" id="fc-inner">
+                    <div class="flashcard-front">
+                        <span class="fc-label">TERM</span>
+                        <h3 id="fc-term">Loading…</h3>
+                        <p class="flip-hint">Tap card to reveal definition ↺</p>
+                    </div>
+                    <div class="flashcard-back">
+                        <span class="fc-label">DEFINITION</span>
+                        <p id="fc-def">Loading…</p>
+                        <p class="flip-hint">Now rate yourself below ↓</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Rating buttons — shown only after flip -->
+            <div class="fc-action-btns" id="fc-action-btns">
+                <button class="fc-learn-btn" onclick="rateCard(false)">✗ Still Learning</button>
+                <button class="fc-know-btn"  onclick="rateCard(true)">✓ Know It</button>
+            </div>
+        </div>
+
+        <!-- RESULT CONTAINER -->
+        <div id="result-container" style="text-align:center;">
+            <div class="result-icon" id="result-emoji">🏆</div>
+            <h2 class="result-title" id="result-title"></h2>
+            <div class="result-score" id="result-score"></div>
+            <p class="result-subtitle" id="result-subtitle"></p>
+            <button class="generate-btn" id="retake-btn" onclick="retakeQuiz()">Retake This Test</button>
+            <button class="generate-btn ghost-btn"   id="review-btn"               style="margin-top:14px;display:none;" onclick="showReview()">Review Answers &amp; Insights</button>
+            <button class="generate-btn ghost-btn"   id="review-still-learning-btn" style="margin-top:14px;display:none;" onclick="reviewStillLearning()">📚 Review Still-Learning Cards</button>
+            <label id="pdf-answers-label" style="display:none;margin-top:14px;font-size:0.88rem;color:var(--text-muted);cursor:pointer;">
+                <input type="checkbox" id="pdf-include-answers" style="accent-color:var(--theme-color);vertical-align:middle;margin-right:6px;">
+                Include answer key + my results
+            </label>
+            <button class="generate-btn ghost-btn" id="download-pdf-btn" style="margin-top:14px;" onclick="downloadQuizPdf()">⬇ Download as PDF</button>
+            <button class="generate-btn nav-btn secondary" style="margin-top:14px;" onclick="resetAppToDashboard()">Back to Dashboard</button>
+        </div>
+
+        <!-- REVIEW CONTAINER -->
+        <div id="review-container">
+            <div class="review-header">
+                <h2 style="margin:0;color:var(--text-main);">Module Breakdown</h2>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="generate-btn secondary" style="width:auto;padding:10px 20px;margin:0;" onclick="downloadQuizPdf()">⬇ PDF</button>
+                    <button class="generate-btn secondary" style="width:auto;padding:10px 20px;margin:0;" onclick="hideReview()">← Back to Score</button>
+                </div>
+            </div>
+            <div id="review-content"></div>
+        </div>
+    </div><!-- /tool-view -->
+</div><!-- /app-container -->
+
+<!-- ══════════════ HISTORY PANEL ══════════════ -->
+<div class="history-overlay" id="historyOverlay" onclick="closeHistoryPanel()"></div>
+<div class="history-panel" id="historyPanel">
+    <div class="history-panel-header">
+        <h2>📋 My History</h2>
+        <button class="history-close-btn" onclick="closeHistoryPanel()">✕</button>
+    </div>
+    <div class="history-list" id="historyList">
+        <div class="history-empty">⏳ Loading your sessions…</div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// 1. FIREBASE
+// ══════════════════════════════════════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyBLzvo0xYQCyfEePzzfSAi0zfDS7i0P2Fc",
+    authDomain: "lee-ai-lab.firebaseapp.com",
+    projectId: "lee-ai-lab",
+    storageBucket: "lee-ai-lab.firebasestorage.app",
+    messagingSenderId: "166368466462",
+    appId: "1:166368466462:web:3cb4e89d8f7f426a99000f"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();   // Firestore for session history
+// Session-only persistence: refreshing or closing the tab ALWAYS requires
+// signing in again — no silent session restore, no dashboard flash.
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+
+// ══════════════════════════════════════════════
+// 2. AUTH LOGIC
+// ══════════════════════════════════════════════
+let isSignUpMode = false;
+const authContainer = document.getElementById('auth-container');
+const appContainer  = document.getElementById('app-container');
+const logoutBtn     = document.getElementById('logoutBtn');
+const errorBox      = document.getElementById('auth-error');
+let currentUserName = '';
+
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        authContainer.style.display = 'none';
+        appContainer.style.display  = 'block';
+        logoutBtn.style.display     = 'flex';
+        currentUserName = (user.displayName || 'Explorer').split(' ')[0];
+        document.getElementById('welcome-text').innerText = `Welcome back, ${currentUserName} 👋`;
+        resetTimer();
+    } else {
+        appContainer.style.display  = 'none';
+        authContainer.style.display = 'block';
+        logoutBtn.style.display     = 'none';
+        // Sign-out (manual, auto, or any other path): fully tear down the
+        // previous user's tool state and delete any hosted chat document.
+        teardownAppState();
+    }
+});
+
+function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+    document.getElementById('auth-submit-btn').innerText   = isSignUpMode ? 'Create Account' : 'Sign In';
+    document.getElementById('auth-mode-text').innerText    = isSignUpMode ? 'Already have an account? ' : "Don't have an account? ";
+    document.getElementById('auth-mode-toggle').innerText  = isSignUpMode ? 'Sign In' : 'Sign Up';
+    document.getElementById('auth-subtitle').innerText     = isSignUpMode ? 'Create a new secure account.' : 'Sign in to access the generator.';
+    const sf = document.getElementById('signup-fields');
+    sf.style.display = isSignUpMode ? 'block' : 'none';
+    document.getElementById('auth-firstname').required = isSignUpMode;
+    // Hide strength bar when switching
+    document.getElementById('pw-strength-bar').style.display  = 'none';
+    document.getElementById('pw-strength-text').style.display = 'none';
+    errorBox.style.display = 'none';
+}
+
+document.getElementById('authForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email    = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn      = document.getElementById('auth-submit-btn');
+    btn.innerText = 'Processing…'; btn.disabled = true;
+
+    if (isSignUpMode) {
+        const fName     = document.getElementById('auth-firstname').value.trim();
+        const nickname  = document.getElementById('auth-nickname').value.trim();
+        const preferred = nickname || fName;
+        auth.createUserWithEmailAndPassword(email, password)
+            .then(cred => cred.user.updateProfile({ displayName: preferred }))
+            .then(() => { currentUserName = preferred; })
+            .catch(err => showAuthError(err.message))
+            .finally(() => resetAuthBtn());
+    } else {
+        auth.signInWithEmailAndPassword(email, password)
+            .catch(err => {
+                if (['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(err.code)) {
+                    showAuthError('Incorrect email or password. Please try again.');
+                } else {
+                    showAuthError(err.message);
+                }
+            })
+            .finally(() => resetAuthBtn());
+    }
+});
+
+function handleGoogleLogin() {
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+        .catch(err => showAuthError(err.message));
+}
+function handleLogout() {
+    if (window.confirm('Are you sure you want to sign out?')) auth.signOut();
+}
+function triggerPasswordReset() {
+    const email = document.getElementById('auth-email').value.trim();
+    if (!email) { showAuthError('Enter your email address first, then click Forgot Password.'); return; }
+    auth.sendPasswordResetEmail(email)
+        .then(() => {
+            errorBox.style.color = 'var(--success)';
+            showAuthError('Reset link sent! Check your inbox (and spam folder).');
+            setTimeout(() => { errorBox.style.color = 'var(--error)'; errorBox.style.display = 'none'; }, 6000);
+        })
+        .catch(err => showAuthError(err.message));
+}
+function showAuthError(msg) { errorBox.innerText = msg; errorBox.style.display = 'block'; }
+function resetAuthBtn() {
+    const btn = document.getElementById('auth-submit-btn');
+    btn.disabled = false;
+    btn.innerText = isSignUpMode ? 'Create Account' : 'Sign In';
+}
+
+// Toggle password visibility
+document.getElementById('togglePassword').addEventListener('click', () => {
+    const input = document.getElementById('auth-password');
+    const icon  = document.getElementById('eye-icon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/>';
+    } else {
+        input.type = 'password';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>';
+    }
+});
+
+// Password strength checker (signup only)
+document.getElementById('auth-password').addEventListener('input', function () {
+    if (!isSignUpMode) return;
+    const bar  = document.getElementById('pw-strength-bar');
+    const text = document.getElementById('pw-strength-text');
+    const val  = this.value;
+    if (!val) { bar.style.display = 'none'; text.style.display = 'none'; return; }
+    let score = 0;
+    if (val.length >= 8)         score++;
+    if (/[A-Z]/.test(val))       score++;
+    if (/[0-9]/.test(val))       score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    bar.className  = 'pw-strength-bar';
+    text.className = 'pw-strength-text';
+    bar.style.display = 'block'; text.style.display = 'block';
+    if (score <= 1) { bar.classList.add('weak');   text.classList.add('weak');   text.innerText = '⚠ Weak password'; }
+    else if (score <= 2) { bar.classList.add('med'); text.classList.add('med');   text.innerText = '◎ Medium password'; }
+    else { bar.classList.add('strong'); text.classList.add('strong'); text.innerText = '✓ Strong password'; }
+});
+
+// ══════════════════════════════════════════════
+// 3. THEME & LANGUAGE
+// ══════════════════════════════════════════════
+const rootEl = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon   = document.getElementById('themeIcon');
+const sunIcon  = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>';
+const moonIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>';
+const storedTheme = localStorage.getItem('theme') || 'dark';
+rootEl.setAttribute('data-theme', storedTheme);
+themeIcon.innerHTML = storedTheme === 'dark' ? sunIcon : moonIcon;
+themeToggle.addEventListener('click', () => {
+    const next = rootEl.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    rootEl.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    themeIcon.innerHTML = next === 'dark' ? sunIcon : moonIcon;
+});
+
+const langToggle   = document.getElementById('langToggle');
+const langDropdown = document.getElementById('langDropdown');
+langToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    langDropdown.style.display = langDropdown.style.display === 'flex' ? 'none' : 'flex';
+});
+document.addEventListener('click', (e) => { if (!e.target.closest('.custom-lang-selector')) langDropdown.style.display = 'none'; });
+document.querySelectorAll('.lang-option').forEach(opt => {
+    opt.addEventListener('click', function () {
+        const code = this.getAttribute('data-lang');
+        const sel  = document.querySelector('.goog-te-combo');
+        if (sel) { sel.value = code; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+        else { document.cookie = `googtrans=/en/${code}; path=/;`; window.location.reload(); }
+        langDropdown.style.display = 'none';
+    });
+});
+
+// ══════════════════════════════════════════════
+// 4. HELPERS
+// ══════════════════════════════════════════════
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(String(str)));
+    return d.innerHTML;
+}
+
+function formatAndSanitize(text) {
+    // Escape first, then apply safe markdown, then sanitize
+    const escaped = escapeHtml(text);
+    const formatted = escaped
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g,    '<em>$1</em>')
+        .replace(/\n/g,            '<br>');
+    return (typeof DOMPurify !== 'undefined')
+        ? DOMPurify.sanitize(formatted, { ALLOWED_TAGS: ['strong','em','br','p','ul','li','ol'] })
+        : formatted;
+}
+
+function showWithFade(el) {
+    el.style.display = 'block';
+    el.classList.remove('fade-in');
+    void el.offsetWidth;
+    el.classList.add('fade-in');
+}
+
+function nowTimeStr() {
+    const n = new Date();
+    return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0');
+}
+
+// Authenticated fetch: attaches the Firebase ID token to every API call.
+// On 401 the session is signed out with a friendly message.
+async function apiFetch(url, options = {}) {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Please sign in again.');
+    const token = await user.getIdToken();
+    lastApiToken = token;
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', 'Bearer ' + token);
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+        let errorMsg = 'Your session expired. Please sign in again.';
+        try {
+            const errData = await res.json();
+            if (errData.error) errorMsg = errData.error;
+        } catch (e) {}
+        await auth.signOut();
+        showAuthError(errorMsg);
+        throw new Error(errorMsg);
+    }
+    return res;
+}
+
+// ══════════════════════════════════════════════
+// 5. DASHBOARD & TOOL NAV
+// ══════════════════════════════════════════════
+function openTool(mode) {
+    document.getElementById('dashboard-view').style.display = 'none';
+    showWithFade(document.getElementById('tool-view'));
+    document.getElementById('generation-mode').value = mode;
+
+    const isChat  = mode === 'chat' || mode === 'voice';
+    const isQuiz  = mode === 'quiz';
+
+    document.getElementById('quizForm').style.display = 'block';
+    document.getElementById('chat-ui-container').style.display  = 'none';
+    document.getElementById('quiz-container').style.display     = 'none';
+    document.getElementById('flashcard-container').style.display= 'none';
+    document.getElementById('result-container').style.display   = 'none';
+    document.getElementById('review-container').style.display   = 'none';
+    document.getElementById('pdf-answers-label').style.display  = 'none';
+
+    if (isChat) {
+        document.getElementById('tool-title').innerText = mode === 'voice' ? 'Voice Ask' : 'Chat & Learn';
+        document.getElementById('submitBtn').innerText  = 'START SESSION';
+        document.getElementById('difficulty-group').style.display     = 'none';
+        document.getElementById('timer-group').style.display          = 'none';
+        document.getElementById('target-output-group').style.display  = 'none';
+        // Voice mode: TTS on by default; Chat: TTS off
+        ttsEnabled = (mode === 'voice');
+        updateTTSButton();
+    } else {
+        document.getElementById('difficulty-group').style.display    = 'block';
+        document.getElementById('timer-group').style.display         = isQuiz ? 'block' : 'none';
+        document.getElementById('target-output-group').style.display = 'block';
+        document.getElementById('tool-title').innerText  = isQuiz ? 'Quiz Generator' : 'Flashcard Generator';
+        document.getElementById('submitBtn').innerText   = isQuiz ? 'GENERATE QUIZ' : 'GENERATE FLASHCARDS';
+
+        const lbl = document.getElementById('target-output-label');
+        lbl.innerHTML = isQuiz
+            ? '<svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>Target Output'
+            : '<svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75h1.5m9 0h-9"/></svg>Number of Flashcards';
+    }
+}
+
+function resetAppToDashboard() {
+    // Stop any running timers/TTS
+    stopQuizTimer();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+    document.getElementById('tool-view').style.display       = 'none';
+    document.getElementById('chat-ui-container').style.display   = 'none';
+    document.getElementById('quiz-container').style.display      = 'none';
+    document.getElementById('flashcard-container').style.display = 'none';
+    document.getElementById('result-container').style.display    = 'none';
+    document.getElementById('review-container').style.display    = 'none';
+    document.getElementById('quizForm').reset();
+    updateTimerDurationVisibility();
+    document.getElementById('quizForm').style.display = 'block';
+
+    const dz = document.getElementById('drop-zone');
+    dz.style.borderColor = ''; dz.style.color = ''; dz.style.borderStyle = '';
+    document.getElementById('file-name-display').innerText = 'Drop PDF / PPTX here or click to browse';
+
+    cleanupActiveChatFile();
+    chatHistory = [];
+    document.getElementById('chat-messages').innerHTML =
+        '<div class="chat-bubble ai">Hello! I\'ve read your document. What would you like me to explain?</div>';
+
+    quizData = []; userAnswers = []; questionTimeRemaining = []; questionTimedOut = []; activeQuizTimerLimit = null; currentIndex = 0;
+    hideTimerTimeoutNotice();
+    flashcardDeck = []; knewItCount = 0; stillLearningCards = []; fcCardFlipped = false;
+
+    document.getElementById('fc-action-btns').style.display = 'none';
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+
+    showWithFade(document.getElementById('dashboard-view'));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ══════════════════════════════════════════════
+// 6. DIFFICULTY SLIDER (colour-shifting)
+// ══════════════════════════════════════════════
+const slider      = document.getElementById('difficulty-slider');
+const hiddenDiff  = document.getElementById('difficulty-hidden');
+const diffLabels  = [document.getElementById('lbl-1'), document.getElementById('lbl-2'), document.getElementById('lbl-3')];
+slider.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    diffLabels.forEach(l => l.classList.remove('active'));
+    diffLabels[val - 1].classList.add('active');
+    const colors  = { 1: '#10b981', 2: '#8aa6ff', 3: '#c084fc' };
+    const labels  = { 1: 'easy',    2: 'medium',   3: 'hard' };
+    rootEl.style.setProperty('--theme-color', colors[val]);
+    hiddenDiff.value = labels[val];
+});
+
+function updateTimerDurationVisibility() {
+    const enabled = document.getElementById('timer-enabled').checked;
+    document.getElementById('timer-duration-group').style.display = enabled ? 'block' : 'none';
+}
+document.getElementById('timer-enabled').addEventListener('change', updateTimerDurationVisibility);
+
+// ══════════════════════════════════════════════
+// 7. FILE INPUT
+// ══════════════════════════════════════════════
+document.getElementById('document').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Client-side extension check (mirrors server whitelist)
+    const ext = file.name.includes('.')
+        ? file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+        : '';
+    if (!ALLOWED_UPLOAD_EXTS.includes(ext)) {
+        this.value = '';
+        document.getElementById('file-name-display').innerText =
+            `${ext.toUpperCase().replace('.','') || 'That'} files are not supported — please use PDF or PPTX.`;
+        document.getElementById('drop-zone').style.borderColor = 'var(--error)';
+        document.getElementById('drop-zone').style.color = 'var(--error)';
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        alert('File is too large! Maximum is 10 MB.');
+        this.value = '';
+        document.getElementById('file-name-display').innerText = 'Drop PDF / PPTX here or click to browse';
+        document.getElementById('drop-zone').style.borderColor = 'var(--error)';
+        return;
+    }
+    document.getElementById('file-name-display').innerText = file.name;
+    const dz = document.getElementById('drop-zone');
+    dz.style.borderColor = 'var(--theme-color)';
+    dz.style.color       = 'var(--theme-color)';
+    dz.style.borderStyle = 'solid';
+});
+
+// ── Drag & Drop (dual functionality: works ALONGSIDE click-to-browse) ──
+const ALLOWED_UPLOAD_EXTS = ['.pdf', '.pptx'];
+const dropZoneEl = document.getElementById('drop-zone');
+const docInputEl = document.getElementById('document');
+
+// Safety net: stop the browser from opening a file dropped ANYWHERE on the page
+['dragover', 'drop'].forEach(ev =>
+    window.addEventListener(ev, (e) => e.preventDefault())
+);
+
+let dragDepth = 0;   // counts nested enter/leave pairs to avoid highlight flicker
+
+dropZoneEl.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragDepth++;
+    dropZoneEl.classList.add('drag-over');
+});
+
+dropZoneEl.addEventListener('dragover', (e) => {
+    e.preventDefault();   // required to allow a drop
+});
+
+dropZoneEl.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropZoneEl.classList.remove('drag-over');
+});
+
+dropZoneEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    dropZoneEl.classList.remove('drag-over');
+
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+
+    // Client-side extension whitelist (server enforces the same rule)
+    const ext = file.name.includes('.')
+        ? file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+        : '';
+    if (!ALLOWED_UPLOAD_EXTS.includes(ext)) {
+        docInputEl.value = '';
+        document.getElementById('file-name-display').innerText =
+            'Only PDF and PPTX files are accepted — or click to browse';
+        dropZoneEl.style.borderColor = 'var(--error)';
+        return;
+    }
+
+    // Feed the dropped file into the SAME hidden input the browse button uses,
+    // then fire the same change event so ALL existing validation applies
+    // (10 MB size check, filename display, green highlight).
+    if (typeof DataTransfer === 'undefined') {
+        alert('Drag-and-drop is not supported in this browser. Please click the zone to browse for your file.');
+        return;
+    }
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    docInputEl.files = dt.files;
+    docInputEl.dispatchEvent(new Event('change'));
+});
+
+// ══════════════════════════════════════════════
+// 8. LASER LOADER
+// ══════════════════════════════════════════════
+const loaderWords = ['Analyzing…','Structuring…','Extracting Data…','Calibrating AI…','Compiling Insights…','Processing…','Building Questions…'];
+let flyingWordInterval;
+function startBlackScanner() {
+    const loader = document.getElementById('full-black-loader');
+    loader.style.display = 'block';
+    flyingWordInterval = setInterval(() => {
+        const span = document.createElement('span');
+        span.className = 'floating-word';
+        span.innerText = loaderWords[Math.floor(Math.random() * loaderWords.length)];
+        span.style.left = Math.random() * 60 + 20 + '%';
+        span.style.top  = Math.random() * 80 + 10 + '%';
+        loader.appendChild(span);
+        setTimeout(() => { if (loader.contains(span)) span.remove(); }, 3000);
+    }, 800);
+}
+function stopBlackScanner() {
+    clearInterval(flyingWordInterval);
+    const loader = document.getElementById('full-black-loader');
+    loader.style.display = 'none';
+    loader.querySelectorAll('.floating-word').forEach(el => el.remove());
+}
+
+// ══════════════════════════════════════════════
+// 9. FORM SUBMIT (generate quiz / flashcards / init chat)
+// ══════════════════════════════════════════════
+let quizData    = [];
+let userAnswers = [];
+let currentIndex = 0;
+let activeFileId = null;
+let activeCleanupTicket = null;   // signed token enabling tab-close cleanup beacon
+let lastApiToken = null;          // last Firebase ID token used (for post-sign-out cleanup)
+
+document.getElementById('quizForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode   = document.getElementById('generation-mode').value;
+    const isChat = mode === 'chat' || mode === 'voice';
+
+    e.target.style.display = 'none';
+    document.querySelector('.ghost-btn').style.display = 'none';
+    startBlackScanner();
+
+    try {
+        const fileInput = document.getElementById('document');
+        const file      = fileInput.files[0];
+        const ext       = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.pdf';
+        const fd        = new FormData();
+        fd.append('document', file, 'upload' + ext);
+
+        if (isChat) {
+            const res  = await apiFetch('/init_chat', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            activeFileId = data.file_id;
+            activeCleanupTicket = data.ct || null;
+            stopBlackScanner();
+            document.querySelector('.ghost-btn').style.display = 'inline-block';
+            showWithFade(document.getElementById('chat-ui-container'));
+            if (mode === 'voice') setTimeout(() => document.getElementById('mic-btn').click(), 400);
+            return;
+        }
+
+        fd.append('difficulty',    document.getElementById('difficulty-hidden').value);
+        fd.append('num_questions', document.getElementById('num_questions').value);
+        fd.append('mode',          mode);
+
+        const res  = await apiFetch('/generate', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        stopBlackScanner();
+        document.querySelector('.ghost-btn').style.display = 'inline-block';
+        // Defense-in-depth: never let malformed AI data reach the renderers
+        if (!Array.isArray(data.quiz) || data.quiz.length === 0) {
+            throw new Error('The AI returned no usable content. Please try again.');
+        }
+        quizData     = data.quiz;
+        currentIndex = 0;
+        // "Include my answers" only makes sense for a completed quiz
+        document.getElementById('pdf-answers-label').style.display = (mode === 'quiz') ? 'inline-block' : 'none';
+
+        if (mode === 'quiz') {
+            userAnswers = new Array(quizData.length).fill(null);
+            activeQuizTimerLimit = getQuizTimerLimit();
+            questionTimeRemaining = new Array(quizData.length).fill(activeQuizTimerLimit);
+            questionTimedOut = new Array(quizData.length).fill(false);
+            hideTimerTimeoutNotice();
+            showWithFade(document.getElementById('quiz-container'));
+            renderQuestion();
+        } else {
+            flashcardDeck      = [...quizData];
+            knewItCount        = 0;
+            stillLearningCards = [];
+            fcCardFlipped      = false;
+            showWithFade(document.getElementById('flashcard-container'));
+            renderFlashcard();
+        }
+    } catch (err) {
+        stopBlackScanner();
+        e.target.style.display = 'block';
+        document.querySelector('.ghost-btn').style.display = 'inline-block';
+        alert('Error: ' + err.message);
+    }
+});
+
+// ══════════════════════════════════════════════
+// 10. QUIZ LOGIC
+// ══════════════════════════════════════════════
+let quizTimerInterval = null;
+let quizTimeLeft      = 0;
+let questionTimeRemaining = [];
+let questionTimedOut      = [];
+let timerNoticeTimeout    = null;
+let activeQuizTimerLimit  = null;
+const TIMER_DURATION_OPTIONS = new Set([30, 45, 60, 90]);
+
+function getQuizTimerLimit() {
+    if (!document.getElementById('timer-enabled').checked) return null;
+    const selectedDuration = Number.parseInt(document.getElementById('timer-duration').value, 10);
+    return TIMER_DURATION_OPTIONS.has(selectedDuration) ? selectedDuration : null;
+}
+
+function startQuizTimer() {
+    const limit = activeQuizTimerLimit;
+    if (!limit) { document.getElementById('timer-wrapper').style.display = 'none'; return; }
+
+    if (questionTimeRemaining[currentIndex] === undefined || questionTimeRemaining[currentIndex] === null) {
+        questionTimeRemaining[currentIndex] = limit;
+    }
+    quizTimeLeft = questionTimeRemaining[currentIndex];
+
+    // Once an answer is chosen, its timer is paused. A timed-out question stays locked.
+    if (userAnswers[currentIndex] !== null) {
+        document.getElementById('timer-wrapper').style.display = 'none';
+        return;
+    }
+    document.getElementById('timer-wrapper').style.display = 'flex';
+    updateTimerUI(limit);
+    if (questionTimedOut[currentIndex] || quizTimeLeft <= 0) return;
+
+    const questionIndex = currentIndex;
+    quizTimerInterval = setInterval(() => {
+        quizTimeLeft--;
+        questionTimeRemaining[questionIndex] = Math.max(0, quizTimeLeft);
+        updateTimerUI(limit);
+        if (quizTimeLeft <= 0) {
+            stopQuizTimer();
+            questionTimedOut[questionIndex] = true;
+            handleQuestionTimeout();
+        }
+    }, 1000);
+}
+function stopQuizTimer() {
+    clearInterval(quizTimerInterval);
+    quizTimerInterval = null;
+}
+function updateTimerUI(limit) {
+    const fill    = document.getElementById('timer-fill');
+    const text    = document.getElementById('timer-text');
+    const wrapper = document.getElementById('timer-wrapper');
+    if (!fill) return;
+    const pct = Math.max(0, (quizTimeLeft / limit)) * 100;
+    fill.style.width = pct + '%';
+    text.innerText   = Math.max(0, quizTimeLeft) + 's';
+    if (quizTimeLeft <= 10) wrapper.classList.add('danger');
+    else                    wrapper.classList.remove('danger');
+}
+
+function handleQuestionTimeout() {
+    showTimerTimeoutNotice();
+    if (currentIndex < quizData.length - 1) {
+        currentIndex++;
+    }
+    // Re-rendering locks the expired question and enables Submit on a timed-out final question.
+    renderQuestion();
+}
+
+function showTimerTimeoutNotice() {
+    const notice = document.getElementById('timer-timeout-notice');
+    clearTimeout(timerNoticeTimeout);
+    notice.style.display = 'block';
+    timerNoticeTimeout = setTimeout(() => { notice.style.display = 'none'; }, 3500);
+}
+
+function hideTimerTimeoutNotice() {
+    clearTimeout(timerNoticeTimeout);
+    document.getElementById('timer-timeout-notice').style.display = 'none';
+}
+
+function renderQuestion() {
+    stopQuizTimer();
+    const q = quizData[currentIndex];
+    const progress = ((currentIndex + 1) / quizData.length) * 100;
+    document.getElementById('progress-fill').style.width = progress + '%';
+    document.getElementById('progress-count').innerText  = `Question ${currentIndex + 1} of ${quizData.length}`;
+    document.getElementById('progress-percent').innerText= Math.round(progress) + '%';
+    document.getElementById('q-text').innerText          = q.question;
+
+    const opts = document.getElementById('q-options');
+    opts.innerHTML = '';
+    const letters = ['A','B','C','D','E','F'];
+    const timedOut = questionTimedOut[currentIndex] === true;
+    q.options.forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerHTML = `<span class="option-label">${letters[i]||'-'}</span><span>${escapeHtml(opt)}</span>`;
+        if (userAnswers[currentIndex] === opt) btn.classList.add('selected');
+        btn.disabled = timedOut;
+        btn.onclick = () => {
+            if (questionTimedOut[currentIndex]) return;
+            userAnswers[currentIndex] = opt;
+            stopQuizTimer();
+            renderQuestion();
+        };
+        opts.appendChild(btn);
+    });
+
+    const prev     = document.getElementById('prevBtn');
+    const next     = document.getElementById('nextBtn');
+    const sub      = document.getElementById('submitQuizBtn');
+    const hasAns   = userAnswers[currentIndex] !== null;
+    const isLast   = currentIndex === quizData.length - 1;
+    prev.style.display = currentIndex > 0 ? 'block' : 'none';
+    if (isLast) {
+        next.style.display = 'none'; sub.style.display = 'block';
+        sub.disabled = !(hasAns || timedOut);
+    } else {
+        next.style.display = 'block'; sub.style.display = 'none';
+        next.disabled = !(hasAns || timedOut);
+    }
+    startQuizTimer();
+}
+
+function skipQuestion() {
+    stopQuizTimer();
+    // userAnswers[currentIndex] stays null → counted as wrong
+    if (currentIndex < quizData.length - 1) {
+        currentIndex++;
+        renderQuestion();
+    } else {
+        // Last question skipped → enable submit
+        document.getElementById('submitQuizBtn').disabled = false;
+    }
+}
+
+document.getElementById('nextBtn').addEventListener('click', () => { if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); } });
+document.getElementById('prevBtn').addEventListener('click', () => { if (currentIndex > 0) { currentIndex--; renderQuestion(); } });
+
+document.getElementById('submitQuizBtn').addEventListener('click', () => {
+    stopQuizTimer();
+    let score = 0;
+    quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
+    const pct = Math.round((score / quizData.length) * 100);
+
+    const fxOverlay = document.getElementById('fx-overlay');
+    const toolView  = document.getElementById('tool-view');
+    if (fxOverlay && toolView) {
+        fxOverlay.className = ''; toolView.classList.remove('screen-shake');
+        void fxOverlay.offsetWidth; void toolView.offsetWidth;
+    }
+
+    let emoji, title, subtitle;
+    if      (pct >= 90) { emoji='🏆'; title='Outstanding!';   subtitle=`Genius level, ${currentUserName}. You crushed it!`;             fireConfetti(); fxOverlay?.classList.add('flash-green-fx'); navigator.vibrate?.([100,50,200]); }
+    else if (pct >= 70) { emoji='🔥'; title='Great Work!';    subtitle=`Solid grip on this material, ${currentUserName}.`;              fireConfetti(); fxOverlay?.classList.add('flash-green-fx'); navigator.vibrate?.([100,50,100]); }
+    else if (pct >= 50) { emoji='🔱'; title='Almost There.';  subtitle=`Good effort, ${currentUserName} — review the insights below.`; fireAlmostThere(); navigator.vibrate?.([50]); }
+    else               { emoji='🧠'; title='Keep Pushing.';  subtitle=`Tough one, ${currentUserName}. Check the insights and retry.`;  fireOops(); fxOverlay?.classList.add('flash-red-fx'); toolView?.classList.add('screen-shake'); navigator.vibrate?.([300,100,300]); }
+
+    document.getElementById('result-emoji').innerText    = emoji;
+    document.getElementById('result-title').innerText    = title;
+    document.getElementById('result-score').innerText    = pct + '%';
+    document.getElementById('result-score').style.display = 'block';
+    document.getElementById('result-subtitle').innerText = subtitle;
+    document.getElementById('quiz-container').style.display    = 'none';
+    document.getElementById('review-btn').style.display        = 'inline-block';
+    document.getElementById('review-still-learning-btn').style.display = 'none';
+    document.getElementById('retake-btn').innerText            = 'Retake This Test';
+    showWithFade(document.getElementById('result-container'));
+    // → Save to history
+    saveSession('quiz', {
+        documentName: document.getElementById('file-name-display').innerText || 'Unknown document',
+        quizData,
+        userAnswers: [...userAnswers],
+        score: pct,
+        numQuestions: quizData.length,
+    });
+});
+
+function showReview() {
+    document.getElementById('result-container').style.display = 'none';
+    const content = document.getElementById('review-content');
+    content.innerHTML = '';
+    quizData.forEach((q, i) => {
+        const userAns   = userAnswers[i];
+        const isCorrect = userAns === q.answer;
+        const isSkipped = userAns === null;
+        let ansHTML;
+        if (isSkipped) {
+            ansHTML = `<div class="review-ans skipped">⤑ Skipped</div><div class="review-ans correct">✓ Correct: ${escapeHtml(q.answer)}</div>`;
+        } else if (isCorrect) {
+            ansHTML = `<div class="review-ans correct">✓ You answered: ${escapeHtml(userAns)}</div>`;
+        } else {
+            ansHTML = `<div class="review-ans wrong">✗ You answered: ${escapeHtml(userAns)}</div><div class="review-ans correct">✓ Correct: ${escapeHtml(q.answer)}</div>`;
+        }
+        const insightHTML = q.explanation
+            ? `<div class="ai-insight"><strong>AI Insight</strong>${escapeHtml(q.explanation)}</div>`
+            : '';
+        const block = document.createElement('div');
+        block.className = 'review-block';
+        block.innerHTML = `<div class="review-q">${i + 1}. ${escapeHtml(q.question)}</div>${ansHTML}${insightHTML}`;
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.title = 'Copy question & answer';
+        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+        copyBtn.onclick = () => copyReviewItem(i, copyBtn);
+        block.appendChild(copyBtn);
+        content.appendChild(block);
+    });
+    showWithFade(document.getElementById('review-container'));
+}
+function hideReview() {
+    document.getElementById('review-container').style.display = 'none';
+    showWithFade(document.getElementById('result-container'));
+}
+
+function retakeQuiz() {
+    document.getElementById('result-container').style.display = 'none';
+    hideTimerTimeoutNotice();
+    const mode = document.getElementById('generation-mode').value;
+    currentIndex = 0;
+    if (mode === 'quiz') {
+        userAnswers = new Array(quizData.length).fill(null);
+        showWithFade(document.getElementById('quiz-container'));
+        renderQuestion();
+    } else if (mode === 'flashcard') {
+        flashcardDeck      = [...quizData];
+        knewItCount        = 0;
+        stillLearningCards = [];
+        fcCardFlipped      = false;
+        currentIndex       = 0;
+        document.getElementById('fc-action-btns').style.display = 'none';
+        document.getElementById('fc-inner').classList.remove('is-flipped');
+        showWithFade(document.getElementById('flashcard-container'));
+        renderFlashcard();
+    }
+}
+
+// ══════════════════════════════════════════════
+// 11. FLASHCARD LOGIC (Improved)
+// ══════════════════════════════════════════════
+let flashcardDeck      = [];
+let knewItCount        = 0;
+let stillLearningCards = [];
+let fcCardFlipped      = false;
+
+function renderFlashcard() {
+    const card     = flashcardDeck[currentIndex];
+    const total    = flashcardDeck.length;
+    const progress = ((currentIndex + 1) / total) * 100;
+
+    document.getElementById('fc-progress-fill').style.width = progress + '%';
+    document.getElementById('fc-progress-count').innerText  = `Card ${currentIndex + 1} of ${total}`;
+    document.getElementById('fc-remaining').innerText       = `${total - currentIndex - 1} remaining`;
+    document.getElementById('fc-knew-count').innerText      = `✓ ${knewItCount} Known`;
+    document.getElementById('fc-learn-count').innerText     = `✗ ${stillLearningCards.length} Still Learning`;
+
+    document.getElementById('fc-term').innerText = card.term;
+    document.getElementById('fc-def').innerText  = card.definition;
+
+    // Reset flip state
+    fcCardFlipped = false;
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+    document.getElementById('fc-action-btns').style.display = 'none';
+}
+
+function flipCard() {
+    const inner = document.getElementById('fc-inner');
+    if (!fcCardFlipped) {
+        fcCardFlipped = true;
+        inner.classList.add('is-flipped');
+        showWithFade(document.getElementById('fc-action-btns'));
+        document.getElementById('fc-action-btns').style.display = 'flex';
+    } else {
+        // Flip back = hide rating buttons
+        fcCardFlipped = false;
+        inner.classList.remove('is-flipped');
+        document.getElementById('fc-action-btns').style.display = 'none';
+    }
+}
+
+function rateCard(knew) {
+    const card = flashcardDeck[currentIndex];
+    if (knew) { knewItCount++; }
+    else      { stillLearningCards.push(card); }
+
+    fcCardFlipped = false;
+    document.getElementById('fc-action-btns').style.display = 'none';
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+
+    if (currentIndex >= flashcardDeck.length - 1) {
+        showFlashcardResults();
+    } else {
+        currentIndex++;
+        renderFlashcard();
+    }
+}
+
+function shuffleDeck() {
+    const deck = [...flashcardDeck];
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    flashcardDeck      = deck;
+    currentIndex       = 0;
+    knewItCount        = 0;
+    stillLearningCards = [];
+    fcCardFlipped      = false;
+    document.getElementById('fc-action-btns').style.display = 'none';
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+    renderFlashcard();
+}
+
+function showFlashcardResults() {
+    document.getElementById('flashcard-container').style.display = 'none';
+    const total = flashcardDeck.length;
+    const pct   = total > 0 ? Math.round((knewItCount / total) * 100) : 0;
+    fireConfetti();
+
+    document.getElementById('result-emoji').innerText     = pct >= 80 ? '🏆' : pct >= 50 ? '🔥' : '📚';
+    document.getElementById('result-title').innerText     = 'Flashcard Session Complete!';
+    document.getElementById('result-score').innerText     = `${knewItCount}/${total}`;
+    document.getElementById('result-score').style.display = 'block';
+    document.getElementById('result-subtitle').innerText  = stillLearningCards.length > 0
+        ? `You knew ${pct}% of the deck, ${currentUserName}. Practice the ones you missed!`
+        : `You knew ${pct}% of the deck, ${currentUserName}. Excellent work!`;
+
+    document.getElementById('review-btn').style.display             = 'none';
+    document.getElementById('retake-btn').innerText                 = '↺ Restart Deck';
+    const slBtn = document.getElementById('review-still-learning-btn');
+    if (stillLearningCards.length > 0) {
+        slBtn.innerText      = `📚 Review ${stillLearningCards.length} Still-Learning Card${stillLearningCards.length !== 1 ? 's' : ''}`;
+        slBtn.style.display  = 'inline-block';
+    } else {
+        slBtn.style.display  = 'none';
+    }
+    showWithFade(document.getElementById('result-container'));
+    // → Save to history
+    saveSession('flashcard', {
+        documentName: document.getElementById('file-name-display').innerText || 'Unknown document',
+        flashcardDeck: [...flashcardDeck],
+        knewItCount,
+        stillLearningCount: stillLearningCards.length,
+        totalCards: flashcardDeck.length,
+        pct,
+    });
+}
+
+function reviewStillLearning() {
+    if (!stillLearningCards.length) return;
+    flashcardDeck      = [...stillLearningCards];
+    knewItCount        = 0;
+    stillLearningCards = [];
+    currentIndex       = 0;
+    fcCardFlipped      = false;
+    document.getElementById('result-container').style.display    = 'none';
+    document.getElementById('fc-action-btns').style.display      = 'none';
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+    showWithFade(document.getElementById('flashcard-container'));
+    renderFlashcard();
+}
+
+// ══════════════════════════════════════════════
+// 12. CHAT, VOICE & TTS
+// ══════════════════════════════════════════════
+let chatHistory  = [];
+let ttsEnabled   = false;
+const sendChatBtn  = document.getElementById('send-chat-btn');
+const chatInputBox = document.getElementById('chat-input-box');
+const chatMessages = document.getElementById('chat-messages');
+const micBtn       = document.getElementById('mic-btn');
+
+function updateTTSButton() {
+    const btn = document.getElementById('tts-toggle-btn');
+    if (!btn) return;
+    btn.title   = ttsEnabled ? 'Voice ON — click to mute' : 'Voice OFF — click to enable';
+    btn.style.opacity = ttsEnabled ? '1' : '0.4';
+    if (ttsEnabled) btn.classList.add('active');
+    else            btn.classList.remove('active');
+}
+
+function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    if (!ttsEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+    updateTTSButton();
+}
+
+function speakText(text) {
+    if (!ttsEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const plain = text.replace(/\*\*(.*?)\*\*/g,'$1').replace(/\*(.*?)\*/g,'$1').replace(/\n/g,' ');
+    const utt   = new SpeechSynthesisUtterance(plain);
+    utt.rate    = 0.95;
+    utt.pitch   = 1;
+    const btn   = document.getElementById('tts-toggle-btn');
+    if (btn) { btn.classList.add('active'); utt.onend = () => { if (ttsEnabled) btn.classList.add('active'); }; }
+    window.speechSynthesis.speak(utt);
+}
+
+// Enter key sends chat message
+chatInputBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatBtn.click(); }
+});
+
+function showTypingIndicator() {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble ai';
+    bubble.id        = 'typing-indicator';
+    bubble.innerHTML = '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+function hideTypingIndicator() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+}
+
+sendChatBtn.addEventListener('click', async () => {
+    const message = chatInputBox.value.trim();
+    if (!message) return;
+    if (!activeFileId) { alert('Session lost. Please restart.'); return; }
+
+    appendChatMessage('user', message);
+    chatInputBox.value = '';
+    sendChatBtn.disabled = true;
+    sendChatBtn.innerText = '…';
+    showTypingIndicator();
+
+    // History EXCLUDES the current message — it travels separately as
+    // `message` and is only recorded below AFTER a successful exchange,
+    // so the server never receives the same question twice.
+    try {
+        const fd = new FormData();
+        fd.append('file_id', activeFileId);
+        fd.append('message', message);
+        fd.append('history', JSON.stringify(chatHistory));
+
+        const res  = await apiFetch('/chat', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        hideTypingIndicator();
+        appendChatMessage('ai', data.reply);
+        // Record the completed exchange only on success — a failed send
+        // never happened, so it must not leak into future prompts.
+        chatHistory.push({ role: 'user', content: message });
+        chatHistory.push({ role: 'ai', content: data.reply });
+        if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+        // Speak the reply in voice mode
+        speakText(data.reply);
+
+    } catch (err) {
+        hideTypingIndicator();
+        // Session-expired path: server wiped file state (Render restart) or
+        // the Gemini file TTL elapsed. Offer a one-click re-upload shortcut.
+        const isExpired = err.message && err.message.toLowerCase().includes('session has expired');
+        if (isExpired) {
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble ai';
+            bubble.innerHTML =
+                '<div class="msg-content">⚠️ <strong>Your session has expired.</strong> The server was restarted or your document timed out.' +
+                ' Please go back and re-upload your file to continue.</div>' +
+                `<button onclick="endChatSession()" style="margin-top:10px;background:var(--theme-color);color:#020617;border:none;padding:8px 16px;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer;">↩ Go Back & Re-upload</button>` +
+                `<span class="msg-timestamp">${nowTimeStr()}</span>`;
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else {
+            appendChatMessage('ai', 'System Error: ' + err.message);
+        }
+    } finally {
+        sendChatBtn.disabled = false;
+        sendChatBtn.innerText = 'Send';
+    }
+});
+
+function appendChatMessage(role, text) {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble ' + role;
+    const safe = formatAndSanitize(text);
+    bubble.innerHTML = `<div class="msg-content">${safe}</div><span class="msg-timestamp">${nowTimeStr()}</span>`;
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Fire-and-forget deletion of the Gemini-hosted chat document.
+// Nulls the ID first so repeated calls are harmless no-ops.
+function cleanupActiveChatFile() {
+    if (!activeFileId) return;
+    const fileId = activeFileId;
+    const ticket = activeCleanupTicket;
+    activeFileId = null;
+    activeCleanupTicket = null;
+    try {
+        const fd = new FormData();
+        fd.append('file_id', fileId);
+        // The signed cleanup ticket keeps this working even right AFTER
+        // sign-out, when no fresh Firebase token is available.
+        if (ticket) fd.append('ct', ticket);
+        const opts = { method: 'POST', body: fd };
+        if (lastApiToken) opts.headers = { 'Authorization': 'Bearer ' + lastApiToken };
+        fetch('/cleanup', opts).catch(() => {});
+    } catch (_) {}
+}
+
+// Full teardown used on every exit path: Back buttons go through
+// resetAppToDashboard(); sign-outs (manual/auto) reach this via
+// onAuthStateChanged; tab close/refresh uses the pagehide beacon below.
+function teardownAppState() {
+    // Stop anything actively running
+    stopQuizTimer();
+    clearTimeout(timerNoticeTimeout);
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    try { if (activeRecognition) activeRecognition.stop(); } catch (_) {}
+    activeRecognition = null;
+
+    // Delete any Gemini-hosted document still attached to a session
+    cleanupActiveChatFile();
+
+    // Reset tool UI
+    document.getElementById('tool-view').style.display           = 'none';
+    document.getElementById('chat-ui-container').style.display   = 'none';
+    document.getElementById('quiz-container').style.display      = 'none';
+    document.getElementById('flashcard-container').style.display = 'none';
+    document.getElementById('result-container').style.display    = 'none';
+    document.getElementById('review-container').style.display    = 'none';
+
+    const form = document.getElementById('quizForm');
+    form.reset();
+    updateTimerDurationVisibility();
+    form.style.display = 'block';
+    document.getElementById('pdf-answers-label').style.display = 'none';
+
+    const dz = document.getElementById('drop-zone');
+    dz.style.borderColor = ''; dz.style.color = ''; dz.style.borderStyle = '';
+    document.getElementById('file-name-display').innerText = 'Drop PDF / PPTX here or click to browse';
+
+    document.getElementById('chat-messages').innerHTML =
+        '<div class="chat-bubble ai">Hello! I\'ve read your document. What would you like me to explain?</div>';
+
+    // Reset in-memory state
+    quizData = []; userAnswers = []; questionTimeRemaining = []; questionTimedOut = []; activeQuizTimerLimit = null; currentIndex = 0;
+    hideTimerTimeoutNotice();
+    flashcardDeck = []; knewItCount = 0; stillLearningCards = []; fcCardFlipped = false;
+    document.getElementById('fc-action-btns').style.display = 'none';
+    document.getElementById('fc-inner').classList.remove('is-flipped');
+    chatHistory = [];
+    ttsEnabled = false;
+    updateTTSButton();
+
+    // Restore the dashboard so the NEXT user lands somewhere sane,
+    // and stop the inactivity countdown (nobody is signed in anymore).
+    showWithFade(document.getElementById('dashboard-view'));
+    clearTimeout(inactivityTimer);
+}
+
+async function endChatSession() {
+    // → Save chat to history before teardown (only if there was actual conversation)
+    if (chatHistory.length > 0) {
+        saveSession('chat', {
+            documentName: document.getElementById('file-name-display').innerText || 'Unknown document',
+            mode: document.getElementById('generation-mode').value,
+            chatHistory: chatHistory.slice(),
+            messageCount: chatHistory.filter(m => m.role === 'user').length,
+        });
+    }
+    cleanupActiveChatFile();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    resetAppToDashboard();
+}
+
+// ── Microphone / Speech Recognition ──
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    || window.mozSpeechRecognition || window.msSpeechRecognition;
+let activeRecognition = null;   // kept global so teardown can stop an active session
+
+if (SpeechRecognition) {
+    micBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const recognition = new SpeechRecognition();
+        activeRecognition = recognition;
+        recognition.continuous     = false;
+        recognition.interimResults = false;
+        recognition.lang           = document.documentElement.lang || navigator.language || 'en-US';
+        recognition.onstart  = () => { micBtn.classList.add('mic-active'); chatInputBox.placeholder = 'Listening…'; };
+        recognition.onresult = (ev) => {
+            chatInputBox.value = ev.results[0][0].transcript;
+            resetMic();
+            sendChatBtn.click();
+        };
+        recognition.onerror = (ev) => {
+            resetMic();
+            if (ev.error === 'not-allowed') alert('Microphone blocked! Allow permissions in your browser settings.');
+            else alert('Mic error: ' + ev.error);
+        };
+        recognition.onend = resetMic;
+        function resetMic() { micBtn.classList.remove('mic-active'); chatInputBox.placeholder = 'Type or speak your question…'; activeRecognition = null; }
+        try { recognition.start(); } catch (err) { resetMic(); alert('Mic error: ' + err.message); }
+    });
+} else {
+    micBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+    });
+}
+
+// ══════════════════════════════════════════════
+// 12b. COPY & PDF EXPORT
+// ══════════════════════════════════════════════
+function copyTextToClipboard(text, btnEl) {
+    const flashCopied = () => {
+        if (!btnEl) return;
+        btnEl.classList.add('copied');
+        btnEl.title = 'Copied!';
+        setTimeout(() => { btnEl.classList.remove('copied'); btnEl.title = 'Copy'; }, 1500);
+    };
+    const fallbackCopy = () => {
+        // Legacy browsers / non-secure contexts
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity  = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (_) {}
+        ta.remove();
+        flashCopied();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(flashCopied).catch(fallbackCopy);
+    } else {
+        fallbackCopy();
+    }
+}
+
+function formatQuestionText(q, index, includeAnswer) {
+    const letters = ['A','B','C','D','E','F'];
+    let out = `Q${index + 1}. ${q.question}
+`;
+    q.options.forEach((opt, i) => { out += `${letters[i] || '-'}) ${opt}
+`; });
+    if (includeAnswer) {
+        out += `
+Answer: ${q.answer}`;
+        if (q.explanation) out += `
+Explanation: ${q.explanation}`;
+    }
+    return out;
+}
+
+function copyCurrentQuestion() {
+    const q = quizData[currentIndex];
+    if (!q) return;
+    // Deliberately EXCLUDES the answer during an active quiz — no accidental cheating.
+    copyTextToClipboard(formatQuestionText(q, currentIndex, false), document.getElementById('q-copy-btn'));
+}
+
+function copyReviewItem(index, btnEl) {
+    const q = quizData[index];
+    if (!q) return;
+    copyTextToClipboard(formatQuestionText(q, index, true), btnEl);
+}
+
+function sanitizeForPdf(str) {
+    // jsPDF core fonts are WinAnsi-only: normalise smart punctuation and
+    // strip emojis/symbols that would otherwise render as garbage.
+    let out = String(str)
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\u2026/g, '...');
+    // Keep printable ASCII/Latin-1 plus newlines (code 10); drop the rest
+    const kept = [];
+    for (const ch of out) {
+        const code = ch.charCodeAt(0);
+        if (code === 10 || (code >= 32 && code <= 255)) kept.push(ch);
+    }
+    return kept.join('');
+}
+
+function downloadQuizPdf() {
+    if (!quizData.length) return;
+    const JsPdfCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!JsPdfCtor) {
+        alert('The PDF library failed to load. Check your internet connection and refresh the page.');
+        return;
+    }
+
+    const mode    = document.getElementById('generation-mode').value;
+    const isFlash = mode === 'flashcard';
+
+    const doc   = new JsPdfCtor({ unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 48;
+    const maxW   = pageW - margin * 2;
+    let y = margin;
+
+    const ensureSpace = (needed) => {
+        if (y + needed > pageH - margin - 24) {
+            doc.addPage();
+            y = margin;
+        }
+    };
+
+    // ── Answer key toggle: OFF = clean practice sheet (questions only),
+    // ON = full study record with score, marked options & explanations ──
+    const hasAnswers = !isFlash && Array.isArray(userAnswers) && userAnswers.some(a => a !== null);
+    const includeKey = hasAnswers && document.getElementById('pdf-include-answers')?.checked;
+
+    // ── Header band (subtitle declares which variant this PDF is) ──
+    doc.setFillColor(138, 166, 255);
+    doc.rect(0, 0, pageW, 92, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text("Lee's AI Study Lab", margin, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    let pdfSubtitle = isFlash ? 'Flashcards Export' : 'Quiz Export';
+    if (!isFlash) pdfSubtitle += includeKey ? '  |  Answer Key + Your Results' : '  |  Practice Sheet - no answers';
+    doc.text(pdfSubtitle, margin, 62);
+    doc.text(dateStr, margin, 78);
+
+    y = 124;
+    doc.setTextColor(15, 23, 42);
+
+    if (includeKey) {
+        let score = 0;
+        quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
+        const pct = Math.round((score / quizData.length) * 100);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(`Score: ${score}/${quizData.length} (${pct}%)`, margin, y);
+        y += 26;
+    }
+
+    const letters = ['A','B','C','D','E','F'];
+
+    quizData.forEach((item, idx) => {
+        if (isFlash) {
+            // Term + definition layout for flashcards
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(15, 23, 42);
+            const termLines = doc.splitTextToSize(`${idx + 1}. ${sanitizeForPdf(item.term)}`, maxW);
+            ensureSpace(termLines.length * 16 + 8);
+            doc.text(termLines, margin, y);
+            y += termLines.length * 16 + 4;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(11);
+            doc.setTextColor(71, 85, 105);
+            const defLines = doc.splitTextToSize(sanitizeForPdf(item.definition), maxW);
+            ensureSpace(defLines.length * 14 + 16);
+            doc.text(defLines, margin, y);
+            y += defLines.length * 14 + 16;
+            return;
+        }
+
+        // Question line
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        const qLines = doc.splitTextToSize(`${idx + 1}. ${sanitizeForPdf(item.question)}`, maxW);
+        ensureSpace(qLines.length * 16 + 6);
+        doc.text(qLines, margin, y);
+        y += qLines.length * 16 + 4;
+
+        // Options
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        item.options.forEach((opt, oi) => {
+            const correct = item.answer === opt;
+            const mine    = includeKey && userAnswers[idx] === opt;
+            let line = `${letters[oi] || '-'}) ${sanitizeForPdf(opt)}`;
+            if (includeKey && correct)  line += '   [CORRECT]';
+            else if (mine)              line += '   [your answer]';
+            const oLines = doc.splitTextToSize(line, maxW - 14);
+            ensureSpace(oLines.length * 14);
+            if (includeKey && correct) { doc.setTextColor(16, 122, 74); doc.setFont('helvetica', 'bold'); }
+            else if (mine)             { doc.setTextColor(37, 99, 235); }
+            else                       { doc.setTextColor(71, 85, 105); }
+            doc.text(oLines, margin + 14, y);
+            y += oLines.length * 14;
+            doc.setFont('helvetica', 'normal');
+        });
+
+        if (includeKey && userAnswers[idx] === null) {
+            doc.setTextColor(148, 163, 184);
+            ensureSpace(14);
+            doc.text('(skipped)', margin + 14, y);
+            y += 14;
+        }
+
+        // Explanation (part of the answer key — hidden on practice sheets)
+        if (item.explanation && includeKey) {
+            doc.setTextColor(100, 116, 139);
+            doc.setFont('helvetica', 'italic');
+            const eLines = doc.splitTextToSize('Why: ' + sanitizeForPdf(item.explanation), maxW - 14);
+            ensureSpace(eLines.length * 13 + 10);
+            doc.text(eLines, margin + 14, y);
+            y += eLines.length * 13 + 10;
+            doc.setFont('helvetica', 'normal');
+        }
+
+        y += 14; // breathing room between items
+    });
+
+    // ── Footer page numbers on every page ──
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${p} of ${totalPages}`, pageW / 2, pageH - 24, { align: 'center' });
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    doc.save(isFlash ? `ai-study-lab-flashcards-${stamp}.pdf` : `ai-study-lab-quiz-${stamp}.pdf`);
+}
+
+// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// 13. SESSION HISTORY (Firestore)
+// ══════════════════════════════════════════════
+
+// ── Save a completed session to Firestore ──
+async function saveSession(type, payload) {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+        await db.collection('users').doc(user.uid)
+            .collection('sessions').add({
+                type,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                ...payload,
+            });
+    } catch (err) {
+        console.warn('History: could not save session', err);
+    }
+}
+
+// ── Open the panel and load sessions ──
+async function openHistoryPanel() {
+    document.getElementById('historyOverlay').style.display = 'block';
+    document.getElementById('historyPanel').classList.add('open');
+    await loadHistory();
+}
+
+function closeHistoryPanel() {
+    document.getElementById('historyOverlay').style.display = 'none';
+    document.getElementById('historyPanel').classList.remove('open');
+}
+
+// Close on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeHistoryPanel();
+});
+
+async function loadHistory() {
+    const user = auth.currentUser;
+    const list = document.getElementById('historyList');
+    if (!user) {
+        list.innerHTML = '<div class="history-empty">Sign in to see your history.</div>';
+        return;
+    }
+    list.innerHTML = '<div class="history-empty">⏳ Loading your sessions…</div>';
+    try {
+        const snap = await db.collection('users').doc(user.uid)
+            .collection('sessions')
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+        if (snap.empty) {
+            list.innerHTML = '<div class="history-empty">No sessions yet.<br>Complete a quiz, flashcard deck or chat to see your history here!</div>';
+            return;
+        }
+        list.innerHTML = '';
+        snap.docs.forEach(doc => renderHistoryItem(list, doc.id, doc.data()));
+    } catch (err) {
+        console.error('History load error:', err);
+        list.innerHTML = '<div class="history-empty">Could not load history. Please try again.</div>';
+    }
+}
+
+const TYPE_LABELS = { quiz: '📋 Quiz', flashcard: '📚 Flashcards', chat: '💬 Chat', voice: '🎤 Voice' };
+const TYPE_EMOJIS = { quiz: '📋', flashcard: '📚', chat: '💬', voice: '🎤' };
+
+function renderHistoryItem(list, docId, data) {
+    const date = data.createdAt ? data.createdAt.toDate().toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    }) : 'Unknown date';
+
+    let scoreText = '';
+    if (data.type === 'quiz')      scoreText = `Score: ${data.score}% &nbsp;(${data.numQuestions} questions)`;
+    if (data.type === 'flashcard') scoreText = `Knew: ${data.knewItCount}/${data.totalCards} cards (${data.pct}%)`;
+    if (data.type === 'chat' || data.type === 'voice') scoreText = `${data.messageCount || 0} messages exchanged`;
+
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.setAttribute('data-type', data.type);
+    item.innerHTML = `
+        <div class="history-item-top">
+            <span class="history-badge">${TYPE_LABELS[data.type] || data.type}</span>
+            <span class="history-doc">${escapeHtml(data.documentName || 'Unknown document')}</span>
+        </div>
+        <div class="history-meta">${date}</div>
+        ${scoreText ? `<div class="history-score">${scoreText}</div>` : ''}
+        <button class="history-delete-btn" title="Delete this session">🗑</button>
+    `;
+    item.addEventListener('click', (e) => {
+        if (e.target.closest('.history-delete-btn')) {
+            deleteHistorySession(docId, item);
+            return;
+        }
+        restoreSession(data);
+        closeHistoryPanel();
+    });
+    item.querySelector('.history-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteHistorySession(docId, item);
+    });
+    list.appendChild(item);
+}
+
+async function deleteHistorySession(docId, itemEl) {
+    const user = auth.currentUser;
+    if (!user) return;
+    if (!window.confirm('Delete this session from your history?')) return;
+    itemEl.style.opacity = '0.4';
+    try {
+        await db.collection('users').doc(user.uid).collection('sessions').doc(docId).delete();
+        itemEl.remove();
+        const list = document.getElementById('historyList');
+        if (!list.children.length) {
+            list.innerHTML = '<div class="history-empty">No sessions yet.</div>';
+        }
+    } catch (err) {
+        itemEl.style.opacity = '1';
+        alert('Could not delete session. Please try again.');
+    }
+}
+
+function restoreSession(data) {
+    // Navigate to the tool view with a read-only restored banner
+    resetAppToDashboard();
+    closeHistoryPanel();
+
+    // Small delay so the dashboard doesn't flash before we switch
+    setTimeout(() => {
+        if (data.type === 'quiz') {
+            quizData    = data.quizData || [];
+            userAnswers = data.userAnswers || [];
+            if (!quizData.length) { alert('This session has no question data saved.'); return; }
+            document.getElementById('dashboard-view').style.display = 'none';
+            showWithFade(document.getElementById('tool-view'));
+            document.getElementById('generation-mode').value = 'quiz';
+            document.getElementById('tool-title').innerText  = 'Quiz Results (Read-only)';
+            document.getElementById('quizForm').style.display = 'none';
+
+            let score = 0;
+            quizData.forEach((q, i) => { if (q.answer === userAnswers[i]) score++; });
+            const pct = Math.round((score / quizData.length) * 100);
+
+            document.getElementById('result-emoji').innerText    = pct >= 90 ? '🏆' : pct >= 70 ? '🔥' : pct >= 50 ? '🔱' : '🧠';
+            document.getElementById('result-title').innerText    = 'Restored Session';
+            document.getElementById('result-score').innerText    = pct + '%';
+            document.getElementById('result-score').style.display = 'block';
+            document.getElementById('result-subtitle').innerText = `${data.documentName || 'Unknown'} • ${quizData.length} questions`;
+            document.getElementById('review-btn').style.display  = 'inline-block';
+            document.getElementById('review-still-learning-btn').style.display = 'none';
+            document.getElementById('retake-btn').innerText      = 'Retake This Quiz';
+            document.getElementById('pdf-answers-label').style.display = 'inline-block';
+
+            // Insert restored banner
+            const rc = document.getElementById('result-container');
+            const existing = rc.querySelector('.restored-banner');
+            if (!existing) {
+                const banner = document.createElement('div');
+                banner.className = 'restored-banner';
+                banner.innerHTML = '📂 <strong>Restored from history</strong> • ' + escapeHtml(data.documentName || '');
+                rc.insertBefore(banner, rc.firstChild);
+            }
+            showWithFade(rc);
+
+        } else if (data.type === 'flashcard') {
+            quizData       = data.flashcardDeck || [];
+            flashcardDeck  = [...quizData];
+            knewItCount    = data.knewItCount || 0;
+            if (!quizData.length) { alert('This session has no flashcard data saved.'); return; }
+            document.getElementById('dashboard-view').style.display = 'none';
+            showWithFade(document.getElementById('tool-view'));
+            document.getElementById('generation-mode').value = 'flashcard';
+            document.getElementById('tool-title').innerText  = 'Flashcard Results (Read-only)';
+            document.getElementById('quizForm').style.display = 'none';
+
+            const total = quizData.length;
+            document.getElementById('result-emoji').innerText    = data.pct >= 80 ? '🏆' : data.pct >= 50 ? '🔥' : '📚';
+            document.getElementById('result-title').innerText    = 'Restored Flashcard Session';
+            document.getElementById('result-score').innerText    = `${knewItCount}/${total}`;
+            document.getElementById('result-score').style.display = 'block';
+            document.getElementById('result-subtitle').innerText = `${data.documentName || 'Unknown'} • ${total} cards`;
+            document.getElementById('review-btn').style.display  = 'none';
+            document.getElementById('review-still-learning-btn').style.display = 'none';
+            document.getElementById('retake-btn').innerText      = '↺ Restart Deck';
+            document.getElementById('pdf-answers-label').style.display = 'none';
+
+            const rc = document.getElementById('result-container');
+            const existing = rc.querySelector('.restored-banner');
+            if (!existing) {
+                const banner = document.createElement('div');
+                banner.className = 'restored-banner';
+                banner.innerHTML = '📂 <strong>Restored from history</strong> • ' + escapeHtml(data.documentName || '');
+                rc.insertBefore(banner, rc.firstChild);
+            }
+            showWithFade(rc);
+
+        } else if (data.type === 'chat' || data.type === 'voice') {
+            const history = data.chatHistory || [];
+            if (!history.length) { alert('This chat session has no messages saved.'); return; }
+            document.getElementById('dashboard-view').style.display = 'none';
+            showWithFade(document.getElementById('tool-view'));
+            document.getElementById('generation-mode').value = data.type;
+            document.getElementById('tool-title').innerText  = data.type === 'voice' ? 'Voice Session (Read-only)' : 'Chat Session (Read-only)';
+            document.getElementById('quizForm').style.display = 'none';
+
+            const msgBox = document.getElementById('chat-messages');
+            msgBox.innerHTML = '';
+            // Header banner
+            const banner = document.createElement('div');
+            banner.className = 'restored-banner';
+            banner.innerHTML = '📂 <strong>Restored chat from history</strong> • ' + escapeHtml(data.documentName || 'Unknown') + ' • Read-only';
+            msgBox.appendChild(banner);
+
+            // Replay all messages
+            history.forEach(msg => appendChatMessage(msg.role === 'user' ? 'user' : 'ai', msg.content));
+
+            // Show chat UI but disable input to make it read-only
+            showWithFade(document.getElementById('chat-ui-container'));
+            document.getElementById('chat-input-box').disabled  = true;
+            document.getElementById('send-chat-btn').disabled   = true;
+            document.getElementById('mic-btn').disabled         = true;
+            document.getElementById('chat-input-box').placeholder = 'Read-only restored session';
+        }
+    }, 80);
+}
+
+// ══════════════════════════════════════════════
+// 14. CONFETTI EFFECTS
+// ══════════════════════════════════════════════
+function fireConfetti() {
+    if (typeof confetti === 'function') confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, zIndex: 9999 });
+}
+function fireAlmostThere() {
+    if (typeof confetti === 'function') confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 }, colors: ['#8aa6ff','#c084fc'], zIndex: 9999 });
+}
+function fireOops() { /* intentionally blank */ }
+
+// ══════════════════════════════════════════════
+// 14. AUTO-LOGOUT (10 min inactivity + 2-min warning)
+// ══════════════════════════════════════════════
+let inactivityTimer;
+let warningTimer;
+const TIMEOUT_MS = 10 * 60 * 1000;   // 10 minutes total
+const WARNING_MS =  8 * 60 * 1000;   // show warning at 8 min (2 min before logout)
+
+// Inject the warning banner into the DOM once
+(function createWarningBanner() {
+    const banner = document.createElement('div');
+    banner.id = 'session-warning-banner';
+    banner.style.cssText = [
+        'display:none',
+        'position:fixed',
+        'bottom:20px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'background:rgba(245,158,11,0.95)',
+        'color:#1c1200',
+        'padding:14px 24px',
+        'border-radius:16px',
+        'font-family:Outfit,sans-serif',
+        'font-weight:600',
+        'font-size:0.95rem',
+        'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
+        'z-index:99999',
+        'max-width:90vw',
+        'text-align:center',
+        'cursor:pointer',
+        'backdrop-filter:blur(8px)',
+        'transition:opacity 0.3s ease',
+    ].join(';');
+    banner.innerHTML = '⏱ You\'ll be signed out in <strong id="session-countdown">2:00</strong> due to inactivity &nbsp;—&nbsp; <u>click anywhere to stay</u>';
+    document.body.appendChild(banner);
+})();
+
+let countdownInterval;
+function showWarningBanner() {
+    const banner = document.getElementById('session-warning-banner');
+    if (!banner || !auth.currentUser) return;
+    banner.style.display = 'block';
+    let secsLeft = 120;
+    const el = document.getElementById('session-countdown');
+    clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        secsLeft--;
+        if (el) {
+            const m = Math.floor(secsLeft / 60);
+            const s = String(secsLeft % 60).padStart(2, '0');
+            el.textContent = `${m}:${s}`;
+        }
+        if (secsLeft <= 0) clearInterval(countdownInterval);
+    }, 1000);
+}
+function hideWarningBanner() {
+    const banner = document.getElementById('session-warning-banner');
+    if (banner) banner.style.display = 'none';
+    clearInterval(countdownInterval);
+}
+
+function resetTimer() {
+    clearTimeout(inactivityTimer);
+    clearTimeout(warningTimer);
+    hideWarningBanner();
+    if (!auth.currentUser) return;
+    warningTimer    = setTimeout(showWarningBanner, WARNING_MS);
+    inactivityTimer = setTimeout(forceLogout, TIMEOUT_MS);
+}
+function forceLogout() {
+    hideWarningBanner();
+    auth.signOut().then(() => {
+        showAuthError('Session expired after 10 minutes of inactivity. Please sign in again.');
+        errorBox.style.color = 'var(--theme-color)';
+        setTimeout(() => { errorBox.style.color = 'var(--error)'; }, 7000);
+    });
+}
+['mousemove','keypress','scroll','touchstart','click'].forEach(ev =>
+    document.addEventListener(ev, resetTimer, { passive: true })
+);
+window.onload = resetTimer;
+
+// ── Cleanup on tab close / refresh / navigation ──
+// sendBeacon survives unload, unlike fetch — guarantees the Gemini-hosted
+// document is deleted even if the user abandons the page mid-session.
+window.addEventListener('pagehide', () => {
+    if (!activeFileId || !navigator.sendBeacon) return;
+    const fd = new FormData();
+    fd.append('file_id', activeFileId);
+    // Beacons cannot send Authorization headers — the signed cleanup
+    // ticket issued at session start authorises this request instead.
+    if (activeCleanupTicket) fd.append('ct', activeCleanupTicket);
+    navigator.sendBeacon('/cleanup', fd);
+});
+</script>
+</body>
+</html>
