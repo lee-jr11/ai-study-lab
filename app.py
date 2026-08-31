@@ -437,11 +437,24 @@ def generate_quiz(user_uid):
         last_error   = 'The AI returned an unexpected response. Please try again.'
         for attempt_no in (1, 2):
             try:
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
-                    contents=contents,
-                    config=types.GenerateContentConfig(response_mime_type='application/json')
-                )
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-1.5-pro',
+                        contents=contents,
+                        config=types.GenerateContentConfig(response_mime_type='application/json')
+                    )
+                except Exception as api_err:
+                    err_str = str(api_err).lower()
+                    if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
+                        logger.warning(f'Gemini Pro overloaded (503), falling back to Flash Lite: {api_err}')
+                        response = client.models.generate_content(
+                            model='gemini-2.5-flash-lite',
+                            contents=contents,
+                            config=types.GenerateContentConfig(response_mime_type='application/json')
+                        )
+                    else:
+                        raise api_err
+                
                 parsed_items, last_error = validate_generated_payload(
                     response.text or '', mode, num_questions
                 )
@@ -611,10 +624,22 @@ def chat_with_document(user_uid):
                 'error': 'Your document session has expired. Please go back and re-upload your file to start a new chat.'
             }), 410
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=[gemini_file, prompt]
-        )
+        try:
+            response = client.models.generate_content(
+                model='gemini-1.5-pro',
+                contents=[gemini_file, prompt]
+            )
+        except Exception as api_err:
+            err_str = str(api_err).lower()
+            if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
+                logger.warning(f'Gemini Pro overloaded in chat (503), falling back to Flash Lite: {api_err}')
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash-lite',
+                    contents=[gemini_file, prompt]
+                )
+            else:
+                raise api_err
+                
         return jsonify({'reply': response.text})
 
     except Exception as e:
