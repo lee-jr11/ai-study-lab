@@ -60,6 +60,16 @@ MAGIC_BYTES = {
 
 DIFFICULTY_OPTIONS = {'easy', 'medium', 'hard'}
 MODE_OPTIONS       = {'quiz', 'flashcard'}
+# Model strategy: Pro first, Flash fallback chain.
+# The app tries PRIMARY_MODEL first, then each FALLBACK_MODEL in order until
+# one responds. This handles 503 "high demand" overloads, 404 deprecations,
+# and 429 quota limits automatically.
+#
+# NOTE: Pro models need a billing-enabled Google AI Studio account.
+# On a free tier the Pro call will fail with 429 and the app will
+# automatically fall back to Flash — so the site always keeps working.
+PRIMARY_MODEL   = 'gemini-3.1-pro-preview'
+FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
 
 # Upload-hardening limits (defence-in-depth on top of the 10 MB upload cap)
 MAX_PPTX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024   # 100 MB total decompressed
@@ -437,24 +447,26 @@ def generate_quiz(user_uid):
         last_error   = 'The AI returned an unexpected response. Please try again.'
         for attempt_no in (1, 2):
             try:
-                try:
-                    response = client.models.generate_content(
-                        model='gemini-1.5-pro',
-                        contents=contents,
-                        config=types.GenerateContentConfig(response_mime_type='application/json')
-                    )
-                except Exception as api_err:
-                    err_str = str(api_err).lower()
-                    if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
-                        logger.warning(f'Gemini Pro overloaded (503), falling back to Flash: {api_err}')
+                # Try models in priority order: Pro first, then each Flash fallback.
+                # Falls through on ANY failure (503 overload, 404 not found, timeout, etc.)
+                response = None
+                last_api_error = None
+                for model_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
+                    try:
                         response = client.models.generate_content(
-                            model='gemini-1.5-flash',
+                            model=model_name,
                             contents=contents,
                             config=types.GenerateContentConfig(response_mime_type='application/json')
                         )
-                    else:
-                        raise api_err
-                
+                        logger.info(f'generate_quiz: {model_name} responded successfully')
+                        break  # success — stop trying fallbacks
+                    except Exception as api_err:
+                        last_api_error = api_err
+                        err_str = str(api_err).lower()
+                        logger.warning(f'generate_quiz: {model_name} failed ({err_str[:120]}), trying next model...')
+                if response is None:
+                    raise last_api_error if last_api_error else RuntimeError('All Gemini models failed.')
+
                 parsed_items, last_error = validate_generated_payload(
                     response.text or '', mode, num_questions
                 )
@@ -624,22 +636,24 @@ def chat_with_document(user_uid):
                 'error': 'Your document session has expired. Please go back and re-upload your file to start a new chat.'
             }), 410
 
-        try:
-            response = client.models.generate_content(
-                model='gemini-1.5-pro',
-                contents=[gemini_file, prompt]
-            )
-        except Exception as api_err:
-            err_str = str(api_err).lower()
-            if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
-                logger.warning(f'Gemini Pro overloaded in chat (503), falling back to Flash: {api_err}')
+        # Try models in priority order: Pro first, then each Flash fallback.
+        response = None
+        last_api_error = None
+        for model_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
+            try:
                 response = client.models.generate_content(
-                    model='gemini-1.5-flash',
+                    model=model_name,
                     contents=[gemini_file, prompt]
                 )
-            else:
-                raise api_err
-                
+                logger.info(f'chat: {model_name} responded successfully')
+                break  # success — stop trying fallbacks
+            except Exception as api_err:
+                last_api_error = api_err
+                err_str = str(api_err).lower()
+                logger.warning(f'chat: {model_name} failed ({err_str[:120]}), trying next model...')
+        if response is None:
+            raise last_api_error if last_api_error else RuntimeError('All Gemini models failed.')
+
         return jsonify({'reply': response.text})
 
     except Exception as e:
@@ -709,3 +723,4 @@ if __name__ == '__main__':
             'is permanently disabled for security reasons.'
         )
     app.run(debug=False)
+
