@@ -954,8 +954,15 @@ document.getElementById('authForm').addEventListener('submit', (e) => {
 });
 
 function handleGoogleLogin() {
-    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-        .catch(err => showAuthError(err.message));
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => {
+        if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+            showAuthError('Popup blocked by your browser. Redirecting to Google...');
+            auth.signInWithRedirect(provider);
+        } else {
+            showAuthError(err.message);
+        }
+    });
 }
 function handleLogout() {
     if (window.confirm('Are you sure you want to sign out?')) auth.signOut();
