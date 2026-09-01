@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import time
+import threading
 import hmac
 import hashlib
 import secrets
@@ -70,6 +71,65 @@ MODE_OPTIONS       = {'quiz', 'flashcard'}
 # automatically fall back to Flash — so the site always keeps working.
 PRIMARY_MODEL   = 'gemini-3.1-pro-preview'
 FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
+
+# ---- Model health cache (keeps the site fast) ----
+# When a model fails we remember it and skip it for a while, so the app never
+# wastes 30-60s on a doomed Pro call on every request.
+#   * Account-level errors (429 quota / 404 not found / 403 forbidden) -> 6h
+#     cooldown, because billing limits won't heal by themselves.
+#   * Transient errors (503 high demand / timeouts) -> 2 min cooldown, so we
+#     retry the Pro model soon in case demand has settled.
+# The cache is re-tested automatically, so enabling billing on your Google AI
+# Studio account will make Pro start working again within the cooldown window.
+_model_health = {}  # model_name -> {'cooldown_until': float, 'reason': str}
+
+def _cooldown_for(error):
+    err_str = str(error).lower()
+    if ('429' in err_str or 'quota' in err_str or 'resource_exhausted' in err_str
+            or '404' in err_str or 'not_found' in err_str
+            or '403' in err_str or 'permission' in err_str or 'forbidden' in err_str):
+        return 6 * 3600          # account-level: don't retry for 6 hours
+    if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
+        return 120               # transient: retry in 2 minutes
+    return 300                   # unknown: retry in 5 minutes
+
+def _mark_model_failed(model_name, error):
+    seconds = _cooldown_for(error)
+    _model_health[model_name] = {'cooldown_until': time.time() + seconds, 'reason': str(error)[:100]}
+    logger.warning(f'model health: {model_name} marked unavailable for {seconds}s ({_model_health[model_name]["reason"]})')
+
+def _model_is_usable(model_name):
+    entry = _model_health.get(model_name)
+    if not entry:
+        return True
+    return time.time() >= entry['cooldown_until']
+
+def _models_to_try():
+    """Priority-ordered models, skipping any that are in cooldown."""
+    available = [m for m in [PRIMARY_MODEL] + FALLBACK_MODELS if _model_is_usable(m)]
+    if not available:
+        logger.warning('model health: all models in cooldown; forcing first fallback')
+        available = [FALLBACK_MODELS[0]]
+    return available
+
+def _warm_model_health():
+    """Probe the primary (Pro) model in the background at startup so the first
+    user request doesn't pay the doomed-Pro-call penalty. Never crashes boot."""
+    if not os.getenv('GEMINI_API_KEY'):
+        return
+    try:
+        client.models.generate_content(
+            model=PRIMARY_MODEL,
+            contents='ping',
+        )
+        _model_health.pop(PRIMARY_MODEL, None)
+        logger.info('model health: primary Pro model responded at startup')
+    except Exception as e:
+        _mark_model_failed(PRIMARY_MODEL, e)
+
+# Kick off the startup probe in the background so boot is never blocked and
+# the first user request skips straight to a working (Flash) model.
+threading.Thread(target=_warm_model_health, daemon=True).start()
 
 # Upload-hardening limits (defence-in-depth on top of the 10 MB upload cap)
 MAX_PPTX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024   # 100 MB total decompressed
@@ -451,7 +511,7 @@ def generate_quiz(user_uid):
                 # Falls through on ANY failure (503 overload, 404 not found, timeout, etc.)
                 response = None
                 last_api_error = None
-                for model_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
+                for model_name in _models_to_try():
                     try:
                         response = client.models.generate_content(
                             model=model_name,
@@ -459,11 +519,12 @@ def generate_quiz(user_uid):
                             config=types.GenerateContentConfig(response_mime_type='application/json')
                         )
                         logger.info(f'generate_quiz: {model_name} responded successfully')
+                        _model_health.pop(model_name, None)  # clear any cooldown
                         break  # success — stop trying fallbacks
                     except Exception as api_err:
                         last_api_error = api_err
-                        err_str = str(api_err).lower()
-                        logger.warning(f'generate_quiz: {model_name} failed ({err_str[:120]}), trying next model...')
+                        _mark_model_failed(model_name, api_err)
+                        logger.warning(f'generate_quiz: {model_name} failed, trying next model...')
                 if response is None:
                     raise last_api_error if last_api_error else RuntimeError('All Gemini models failed.')
 
@@ -639,18 +700,19 @@ def chat_with_document(user_uid):
         # Try models in priority order: Pro first, then each Flash fallback.
         response = None
         last_api_error = None
-        for model_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
+        for model_name in _models_to_try():
             try:
                 response = client.models.generate_content(
                     model=model_name,
                     contents=[gemini_file, prompt]
                 )
                 logger.info(f'chat: {model_name} responded successfully')
+                _model_health.pop(model_name, None)  # clear any cooldown
                 break  # success — stop trying fallbacks
             except Exception as api_err:
                 last_api_error = api_err
-                err_str = str(api_err).lower()
-                logger.warning(f'chat: {model_name} failed ({err_str[:120]}), trying next model...')
+                _mark_model_failed(model_name, api_err)
+                logger.warning(f'chat: {model_name} failed, trying next model...')
         if response is None:
             raise last_api_error if last_api_error else RuntimeError('All Gemini models failed.')
 
