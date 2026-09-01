@@ -123,7 +123,7 @@ def _warm_model_health():
             contents='ping',
         )
         _model_health.pop(PRIMARY_MODEL, None)
-        logger.info('model health: primary Pro model responded at startup')
+        logger.info('model health: primary model responded at startup')
     except Exception as e:
         _mark_model_failed(PRIMARY_MODEL, e)
 
