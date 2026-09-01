@@ -647,6 +647,14 @@ def chat_with_document(user_uid):
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
 
 
+@app.route('/models')
+def list_models():
+    try:
+        models = [m.name for m in client.models.list()]
+        return jsonify(models)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @app.route('/cleanup', methods=['POST'])
 @limiter.limit("60 per minute")
 def cleanup_chat():
