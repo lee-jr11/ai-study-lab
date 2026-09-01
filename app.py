@@ -439,7 +439,7 @@ def generate_quiz(user_uid):
             try:
                 try:
                     response = client.models.generate_content(
-                        model='gemini-1.5-pro-latest',
+                        model='gemini-3.1-pro',
                         contents=contents,
                         config=types.GenerateContentConfig(response_mime_type='application/json')
                     )
@@ -448,7 +448,7 @@ def generate_quiz(user_uid):
                     if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
                         logger.warning(f'Gemini Pro overloaded (503), falling back to Flash: {api_err}')
                         response = client.models.generate_content(
-                            model='gemini-1.5-flash-latest',
+                            model='gemini-3.7-flash',
                             contents=contents,
                             config=types.GenerateContentConfig(response_mime_type='application/json')
                         )
@@ -626,7 +626,7 @@ def chat_with_document(user_uid):
 
         try:
             response = client.models.generate_content(
-                model='gemini-1.5-pro-latest',
+                model='gemini-3.1-pro',
                 contents=[gemini_file, prompt]
             )
         except Exception as api_err:
@@ -634,7 +634,7 @@ def chat_with_document(user_uid):
             if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
                 logger.warning(f'Gemini Pro overloaded in chat (503), falling back to Flash: {api_err}')
                 response = client.models.generate_content(
-                    model='gemini-1.5-flash-latest',
+                    model='gemini-3.7-flash',
                     contents=[gemini_file, prompt]
                 )
             else:
