@@ -446,9 +446,9 @@ def generate_quiz(user_uid):
                 except Exception as api_err:
                     err_str = str(api_err).lower()
                     if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
-                        logger.warning(f'Gemini Pro overloaded (503), falling back to Flash Lite: {api_err}')
+                        logger.warning(f'Gemini Pro overloaded (503), falling back to Flash: {api_err}')
                         response = client.models.generate_content(
-                            model='gemini-2.5-flash-lite',
+                            model='gemini-1.5-flash',
                             contents=contents,
                             config=types.GenerateContentConfig(response_mime_type='application/json')
                         )
@@ -475,7 +475,7 @@ def generate_quiz(user_uid):
 
     except Exception as e:
         logger.error(f'generate_quiz error: {e}')
-        return jsonify({'error': 'Failed to generate content. The document may be too complex or large.'}), 500
+        return jsonify({'error': f'Failed to generate content: {str(e)}'}), 500
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -632,9 +632,9 @@ def chat_with_document(user_uid):
         except Exception as api_err:
             err_str = str(api_err).lower()
             if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
-                logger.warning(f'Gemini Pro overloaded in chat (503), falling back to Flash Lite: {api_err}')
+                logger.warning(f'Gemini Pro overloaded in chat (503), falling back to Flash: {api_err}')
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
+                    model='gemini-1.5-flash',
                     contents=[gemini_file, prompt]
                 )
             else:
