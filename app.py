@@ -69,8 +69,8 @@ MODE_OPTIONS       = {'quiz', 'flashcard'}
 # NOTE: Pro models need a billing-enabled Google AI Studio account.
 # On a free tier the Pro call will fail with 429 and the app will
 # automatically fall back to Flash — so the site always keeps working.
-PRIMARY_MODEL   = 'gemini-3.1-pro-preview'
-FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
+PRIMARY_MODEL   = 'gemini-2.5-flash'
+FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
 
 # ---- Model health cache (keeps the site fast) ----
 # When a model fails we remember it and skip it for a while, so the app never
