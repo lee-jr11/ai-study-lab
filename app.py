@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 import logging
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, g, jsonify, render_template, request
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -13,8 +13,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import time
 import threading
-import hmac
-import hashlib
 import secrets
 from functools import wraps
 from urllib.request import urlopen
@@ -33,16 +31,103 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # Hard 10 MB cap
 app.config['TEMPLATES_AUTO_RELOAD'] = True  # Dev: pick up template edits without a restart
 
-# In-memory rate limiter (no Redis needed on free tier)
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-Permitted-Cross-Domain-Policies', 'none')
+    response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+    response.headers.setdefault('Cross-Origin-Resource-Policy', 'same-origin')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('X-XSS-Protection', '0')
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' "
+            "https://www.googletagmanager.com https://www.gstatic.com "
+            "https://translate.google.com https://translate.googleapis.com "
+            "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
+            "https://cdn.jsdelivr.net https://www.gstatic.com "
+            "https://translate.googleapis.com; "
+            "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https://*.googleapis.com https://*.google.com "
+            "https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com; "
+            "frame-src 'self' https://*.firebaseapp.com "
+            "https://accounts.google.com https://translate.googleapis.com; "
+            "object-src 'none'; base-uri 'self'; form-action 'self'; "
+            "frame-ancestors 'none'"
+        ),
+    )
+    response.headers.setdefault(
+        'Permissions-Policy',
+        'camera=(), geolocation=(), microphone=(self)',
+    )
+    if response.mimetype in {'text/html', 'application/json'}:
+        response.headers.setdefault('Cache-Control', 'no-store')
+    if request.is_secure:
+        response.headers.setdefault(
+            'Strict-Transport-Security',
+            'max-age=31536000; includeSubDomains',
+        )
+    return response
+
+
+def user_rate_limit_key():
+    """Limit each authenticated user separately, regardless of shared proxies."""
+    cached_uid = getattr(g, '_verified_uid', None)
+    if cached_uid:
+        return cached_uid
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        try:
+            uid = verify_firebase_id_token(auth_header[7:].strip())
+        except AuthError:
+            uid = None
+        if uid:
+            g._verified_uid = uid
+            return uid
+    return get_remote_address()
+
+
+# Per-user rate limiter. Memory storage is fine for one process; configure
+# RATELIMIT_STORAGE_URI for multiple workers or instances.
 limiter = Limiter(
-    get_remote_address,
+    key_func=user_rate_limit_key,
     app=app,
     default_limits=["200 per hour"],
-    storage_uri="memory://"
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 )
 
-# Gemini client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Gemini client (created lazily so the web UI can start without a key)
+_gemini_client = None
+_gemini_client_lock = threading.Lock()
+
+
+class AIUnavailableError(RuntimeError):
+    """Raised when the Gemini API key is missing or still a placeholder."""
+
+
+def _gemini_api_key() -> str:
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not key or key == "your_gemini_api_key_here":
+        return ""
+    return key
+
+
+def get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        api_key = _gemini_api_key()
+        if not api_key:
+            raise AIUnavailableError("GEMINI_API_KEY is not configured.")
+        with _gemini_client_lock:
+            if _gemini_client is None:
+                _gemini_client = genai.Client(api_key=api_key)
+    return _gemini_client
 
 # ──────────────────────────────────────────────
 # Constants / whitelists
@@ -61,26 +146,22 @@ MAGIC_BYTES = {
 
 DIFFICULTY_OPTIONS = {'easy', 'medium', 'hard'}
 MODE_OPTIONS       = {'quiz', 'flashcard'}
-# Model strategy: Pro first, Flash fallback chain.
+# Model strategy: primary model followed by a fallback chain.
 # The app tries PRIMARY_MODEL first, then each FALLBACK_MODEL in order until
 # one responds. This handles 503 "high demand" overloads, 404 deprecations,
 # and 429 quota limits automatically.
-#
-# NOTE: Pro models need a billing-enabled Google AI Studio account.
-# On a free tier the Pro call will fail with 429 and the app will
-# automatically fall back to Flash — so the site always keeps working.
 PRIMARY_MODEL   = 'gemini-2.5-flash'
 FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
 
 # ---- Model health cache (keeps the site fast) ----
 # When a model fails we remember it and skip it for a while, so the app never
-# wastes 30-60s on a doomed Pro call on every request.
+# wastes 30-60s on a failing primary-model call on every request.
 #   * Account-level errors (429 quota / 404 not found / 403 forbidden) -> 6h
 #     cooldown, because billing limits won't heal by themselves.
 #   * Transient errors (503 high demand / timeouts) -> 2 min cooldown, so we
-#     retry the Pro model soon in case demand has settled.
+#     retry the primary model soon in case demand has settled.
 # The cache is re-tested automatically, so enabling billing on your Google AI
-# Studio account will make Pro start working again within the cooldown window.
+# Studio account will make paid models work again after the cooldown.
 _model_health = {}  # model_name -> {'cooldown_until': float, 'reason': str}
 
 def _cooldown_for(error):
@@ -89,12 +170,17 @@ def _cooldown_for(error):
             or '404' in err_str or 'not_found' in err_str
             or '403' in err_str or 'permission' in err_str or 'forbidden' in err_str):
         return 6 * 3600          # account-level: don't retry for 6 hours
-    if '503' in err_str or 'unavailable' in err_str or 'high demand' in err_str or 'timed out' in err_str:
+    if ('500' in err_str or '502' in err_str or '503' in err_str or '504' in err_str
+            or 'unavailable' in err_str or 'high demand' in err_str
+            or 'timed out' in err_str or 'timeout' in err_str):
         return 120               # transient: retry in 2 minutes
-    return 300                   # unknown: retry in 5 minutes
+    return None                  # request-specific error: don't penalize every user
 
 def _mark_model_failed(model_name, error):
     seconds = _cooldown_for(error)
+    if seconds is None:
+        logger.info(f'model health: {model_name} returned a request-specific error; not cooling down')
+        return
     _model_health[model_name] = {'cooldown_until': time.time() + seconds, 'reason': str(error)[:100]}
     logger.warning(f'model health: {model_name} marked unavailable for {seconds}s ({_model_health[model_name]["reason"]})')
 
@@ -113,17 +199,17 @@ def _models_to_try():
     return available
 
 def _warm_model_health():
-    """Probe the primary (Pro) model in the background at startup so the first
-    user request doesn't pay the doomed-Pro-call penalty. Never crashes boot."""
-    if not os.getenv('GEMINI_API_KEY'):
+    """Probe the primary model in the background so the first user request
+    does not pay a failing-model penalty. Never crashes boot."""
+    if not _gemini_api_key():
         return
     try:
-        client.models.generate_content(
+        get_gemini_client().models.generate_content(
             model=PRIMARY_MODEL,
             contents='ping',
         )
         _model_health.pop(PRIMARY_MODEL, None)
-        logger.info('model health: primary Pro model responded at startup')
+        logger.info('model health: primary model responded at startup')
     except Exception as e:
         _mark_model_failed(PRIMARY_MODEL, e)
 
@@ -144,14 +230,18 @@ GOOGLE_CERTS_URL = ('https://www.googleapis.com/robot/v1/metadata/x509/'
                     'securetoken@system.gserviceaccount.com')
 
 _cert_cache = {'certs': None, 'fetched_at': 0.0}
+_cert_lock = threading.Lock()
 
 
 def _get_google_certs():
     """Fetch & cache Google's public signing certificates (refresh hourly)."""
     if _cert_cache['certs'] is None or time.time() - _cert_cache['fetched_at'] > 3600:
-        with urlopen(GOOGLE_CERTS_URL, timeout=10) as resp:
-            _cert_cache['certs'] = json.loads(resp.read().decode('utf-8'))
-        _cert_cache['fetched_at'] = time.time()
+        with _cert_lock:
+            if (_cert_cache['certs'] is None
+                    or time.time() - _cert_cache['fetched_at'] > 3600):
+                with urlopen(GOOGLE_CERTS_URL, timeout=10) as resp:
+                    _cert_cache['certs'] = json.loads(resp.read().decode('utf-8'))
+                _cert_cache['fetched_at'] = time.time()
     return _cert_cache['certs']
 
 
@@ -199,6 +289,10 @@ def require_auth(f):
     """Flask decorator: verify the Bearer Firebase ID token, inject user_uid."""
     @wraps(f)
     def wrapper(*args, **kwargs):
+        cached_uid = getattr(g, '_verified_uid', None)
+        if cached_uid:
+            g.user_uid = cached_uid
+            return f(user_uid=cached_uid, *args, **kwargs)
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
             return jsonify({'error': 'Authentication required. Please sign in.'}), 401
@@ -206,56 +300,87 @@ def require_auth(f):
             uid = verify_firebase_id_token(auth_header[7:].strip())
         except AuthError as exc:
             return jsonify({'error': str(exc)}), 401
+        g.user_uid = uid
         return f(user_uid=uid, *args, **kwargs)
     return wrapper
 
-
-# Gemini Files API name -> owning Firebase uid (in-memory).
-# Bound on exposure: Gemini auto-deletes hosted files after ~48h, so entries
-# lost in a server restart simply expire server-side shortly afterwards.
-file_owners = {}
-
 # ── Short-lived signed "cleanup tickets" ──
 # navigator.sendBeacon (used for tab-close cleanup) cannot send custom
-# Authorization headers, so /init_chat issues an HMAC ticket bound to
-# (uid, file_id, expiry) that /cleanup accepts as an alternative credential.
+# Authorization headers, so /init_chat issues a signed session ticket. The
+# ticket also proves file ownership without process-local state.
 _CLEANUP_SECRET_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '.cleanup_secret')
 _cleanup_secret_cache = None
+_cleanup_secret_lock = threading.Lock()
 
 
 def _cleanup_secret() -> str:
     global _cleanup_secret_cache
+    configured = os.getenv('CLEANUP_SECRET', '').strip()
+    if configured:
+        if len(configured) < 32:
+            raise RuntimeError('CLEANUP_SECRET must be at least 32 characters.')
+        return configured
     if _cleanup_secret_cache is None:
-        if os.path.exists(_CLEANUP_SECRET_PATH):
-            with open(_CLEANUP_SECRET_PATH, 'r', encoding='utf-8') as fh:
-                _cleanup_secret_cache = fh.read().strip()
-        else:
-            generated = secrets.token_hex(32)
-            with open(_CLEANUP_SECRET_PATH, 'w', encoding='utf-8') as fh:
-                fh.write(generated)
-            _cleanup_secret_cache = generated
+        with _cleanup_secret_lock:
+            if _cleanup_secret_cache is None:
+                try:
+                    fd = os.open(
+                        _CLEANUP_SECRET_PATH,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                    )
+                except FileExistsError:
+                    pass
+                else:
+                    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+                        fh.write(secrets.token_hex(32))
+                        fh.flush()
+                        os.fsync(fh.fileno())
+                for _ in range(40):
+                    with open(_CLEANUP_SECRET_PATH, 'r', encoding='utf-8') as fh:
+                        value = fh.read().strip()
+                    if len(value) == 64:
+                        _cleanup_secret_cache = value
+                        break
+                    time.sleep(0.05)
+                if not _cleanup_secret_cache:
+                    raise RuntimeError(
+                        'CLEANUP_SECRET file is empty or could not be read.'
+                    )
     return _cleanup_secret_cache
 
 
 def make_cleanup_ticket(uid: str, file_id: str, ttl_seconds: int = 7200) -> str:
-    exp = int(time.time()) + ttl_seconds
-    msg = f'{uid}|{file_id}|{exp}'.encode('utf-8')
-    sig = hmac.new(_cleanup_secret().encode('utf-8'), msg, hashlib.sha256).hexdigest()
-    return f'{exp}.{sig}'
+    return jwt.encode(
+        {
+            'sub': uid,
+            'file': file_id,
+            'exp': int(time.time()) + ttl_seconds,
+        },
+        _cleanup_secret(),
+        algorithm='HS256',
+    )
 
 
-def verify_cleanup_ticket(uid: str, file_id: str, ticket: str) -> bool:
+def verify_cleanup_ticket(file_id: str, ticket: str, expected_uid=None):
     try:
-        exp_str, sig = ticket.split('.', 1)
-        exp = int(exp_str)
-    except (ValueError, AttributeError):
-        return False
-    if exp < time.time():
-        return False
-    msg = f'{uid}|{file_id}|{exp}'.encode('utf-8')
-    expected = hmac.new(_cleanup_secret().encode('utf-8'), msg, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(sig, expected)
+        payload = jwt.decode(
+            ticket,
+            _cleanup_secret(),
+            algorithms=['HS256'],
+            options={'require': ['exp', 'sub', 'file']},
+        )
+    except jwt.PyJWTError:
+        return None
+    if payload.get('file') != file_id:
+        return None
+    uid = payload.get('sub')
+    if not isinstance(uid, str) or not uid:
+        return None
+    if expected_uid is not None and uid != expected_uid:
+        return None
+    return uid
 
 
 # ──────────────────────────────────────────────
@@ -280,20 +405,41 @@ def validate_pptx_archive(file_path: str):
     """
     try:
         with zipfile.ZipFile(file_path) as zf:
+            total_uncompressed = sum(info.file_size for info in zf.infolist())
+            if total_uncompressed > MAX_PPTX_UNCOMPRESSED_BYTES:
+                logger.warning(
+                    f'pptx rejected: uncompressed size {total_uncompressed} exceeds limit'
+                )
+                return 'This PPTX expands to too much data to be processed safely.'
             bad = zf.testzip()
             if bad is not None:
                 return 'The PPTX archive appears to be corrupted.'
-            total_uncompressed = sum(info.file_size for info in zf.infolist())
     except zipfile.BadZipFile:
         return 'The PPTX file is not a valid presentation archive.'
     except Exception:
         return 'The PPTX file could not be read.'
-    if total_uncompressed > MAX_PPTX_UNCOMPRESSED_BYTES:
-        logger.warning(
-            f'pptx rejected: uncompressed size {total_uncompressed} exceeds limit'
-        )
-        return 'This PPTX expands to too much data to be processed safely.'
     return None
+
+
+def _iter_shape_text(shape):
+    """Yield text from ordinary shapes, grouped shapes, and table cells."""
+    if getattr(shape, 'has_table', False):
+        for row in shape.table.rows:
+            for cell in row.cells:
+                text = getattr(cell, 'text', '').strip()
+                if text:
+                    yield text
+        return
+
+    nested_shapes = getattr(shape, 'shapes', None)
+    if nested_shapes is not None:
+        for nested in nested_shapes:
+            yield from _iter_shape_text(nested)
+        return
+
+    text = getattr(shape, 'text', '').strip()
+    if text:
+        yield text
 
 
 def extract_text_from_pptx(file_path: str) -> str:
@@ -302,9 +448,9 @@ def extract_text_from_pptx(file_path: str) -> str:
     total_chars = 0
     for slide in prs.slides:
         for shape in slide.shapes:
-            if hasattr(shape, 'text') and shape.text.strip():
-                parts.append(shape.text)
-                total_chars += len(shape.text)
+            for text in _iter_shape_text(shape):
+                parts.append(text)
+                total_chars += len(text) + 1
                 # Bound the text forwarded to Gemini (token-abuse guard)
                 if total_chars >= MAX_EXTRACTED_TEXT_CHARS:
                     logger.warning('pptx text extraction hit character cap')
@@ -371,7 +517,7 @@ def validate_generated_payload(raw_text: str, mode: str, requested_count: int):
 
         # Hard requirements: real question, sane option list, and an answer
         # that EXACTLY matches one of the options (else scoring breaks).
-        if not question or not (2 <= len(options) <= 6):
+        if not question or not (2 <= len(options) <= 6) or len(set(options)) != len(options):
             continue
         if not answer or answer not in options:
             continue
@@ -419,8 +565,9 @@ def index():
 
 
 @app.route('/generate', methods=['POST'])
-@limiter.limit("10 per minute")
 @require_auth
+@limiter.limit("10 per minute", key_func=user_rate_limit_key)
+@limiter.limit("100 per day", key_func=user_rate_limit_key)
 def generate_quiz(user_uid):
     if 'document' not in request.files:
         return jsonify({'error': 'No document uploaded.'}), 400
@@ -458,8 +605,16 @@ def generate_quiz(user_uid):
 
     temp_file_path = None
     gemini_file = None
+    gemini_client = None
 
     try:
+        try:
+            gemini_client = get_gemini_client()
+        except AIUnavailableError:
+            return jsonify({
+                'error': 'AI service is not configured. Please contact the app owner.'
+            }), 503
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tf:
             tf.write(file_bytes)
             temp_file_path = tf.name
@@ -468,6 +623,7 @@ def generate_quiz(user_uid):
             prompt = (
                 f"You are an expert tutor. Create exactly {num_questions} flashcards from the provided document.\n"
                 f"Difficulty: {difficulty}.\n\n"
+                "Every card must be answerable from the document alone. Do not add outside facts.\n"
                 "Respond ONLY with a valid JSON object — no markdown, no extra text.\n"
                 "The object must have a single key \"quiz\" containing an array of objects.\n"
                 "Each object must have exactly:\n"
@@ -478,6 +634,7 @@ def generate_quiz(user_uid):
             prompt = (
                 f"You are an expert university professor. Generate exactly {num_questions} multiple-choice questions from the provided document.\n"
                 f"Difficulty: {difficulty}.\n\n"
+                "Every question and explanation must come from the document. Do not add outside facts.\n"
                 "Respond ONLY with a valid JSON object — no markdown, no extra text.\n"
                 "The object must have a single key \"quiz\" containing an array of objects.\n"
                 "Each object must have exactly:\n"
@@ -498,7 +655,7 @@ def generate_quiz(user_uid):
                 return jsonify({'error': 'The PPTX file appears to have no readable text content.'}), 400
             contents.append(f'Document content:\n\n{pptx_text}')
         else:
-            gemini_file = client.files.upload(file=temp_file_path)
+            gemini_file = gemini_client.files.upload(file=temp_file_path)
             contents.append(gemini_file)
 
         # Generate + validate, with ONE automatic retry when the AI's output
@@ -513,7 +670,7 @@ def generate_quiz(user_uid):
                 last_api_error = None
                 for model_name in _models_to_try():
                     try:
-                        response = client.models.generate_content(
+                        response = gemini_client.models.generate_content(
                             model=model_name,
                             contents=contents,
                             config=types.GenerateContentConfig(response_mime_type='application/json')
@@ -548,20 +705,23 @@ def generate_quiz(user_uid):
 
     except Exception as e:
         logger.error(f'generate_quiz error: {e}')
-        return jsonify({'error': f'Failed to generate content: {str(e)}'}), 500
+        return jsonify({
+            'error': 'Failed to generate content. Please try again.'
+        }), 500
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
-        if gemini_file:
+        if gemini_file and gemini_client:
             try:
-                client.files.delete(name=gemini_file.name)
+                gemini_client.files.delete(name=gemini_file.name)
             except Exception:
                 pass
 
 
 @app.route('/init_chat', methods=['POST'])
-@limiter.limit("10 per minute")
 @require_auth
+@limiter.limit("10 per minute", key_func=user_rate_limit_key)
+@limiter.limit("50 per day", key_func=user_rate_limit_key)
 def init_chat(user_uid):
     if 'document' not in request.files:
         return jsonify({'error': 'No document uploaded.'}), 400
@@ -573,7 +733,7 @@ def init_chat(user_uid):
     filename = secure_filename(file.filename)
     file_ext = os.path.splitext(filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
-        if file_ext in FAKE_PPTX_EXTENSIONS or file_ext == '.docx':
+        if file_ext in FAKE_PPTX_EXTENSIONS:
             return jsonify({'error': f'{file_ext.upper().lstrip(".") } files are not supported. Please convert your document to PDF or PPTX first.'}), 400
         return jsonify({'error': 'Only PDF and PPTX files are accepted.'}), 400
 
@@ -584,8 +744,16 @@ def init_chat(user_uid):
     temp_file_path = None
     txt_path = None
     gemini_file = None
+    gemini_client = None
 
     try:
+        try:
+            gemini_client = get_gemini_client()
+        except AIUnavailableError:
+            return jsonify({
+                'error': 'AI service is not configured. Please contact the app owner.'
+            }), 503
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tf:
             tf.write(file_bytes)
             temp_file_path = tf.name
@@ -602,14 +770,12 @@ def init_chat(user_uid):
             with tempfile.NamedTemporaryFile(delete=False, suffix='.txt', mode='w', encoding='utf-8') as txt_f:
                 txt_f.write(pptx_text)
                 txt_path = txt_f.name
-            gemini_file = client.files.upload(file=txt_path)
+            gemini_file = gemini_client.files.upload(file=txt_path)
         else:
-            gemini_file = client.files.upload(file=temp_file_path)
+            gemini_file = gemini_client.files.upload(file=temp_file_path)
 
-        # Bind this hosted document to its owner and issue a short-lived
-        # signed cleanup ticket (used by the tab-close beacon, which cannot
-        # send Authorization headers).
-        file_owners[gemini_file.name] = user_uid
+        # The signed ticket carries ownership, so no process-local session
+        # state is needed between workers or instances.
         return jsonify({
             'file_id': gemini_file.name,
             'ct': make_cleanup_ticket(user_uid, gemini_file.name),
@@ -617,9 +783,9 @@ def init_chat(user_uid):
 
     except Exception as e:
         logger.error(f'init_chat error: {e}')
-        if gemini_file:
+        if gemini_file and gemini_client:
             try:
-                client.files.delete(name=gemini_file.name)
+                gemini_client.files.delete(name=gemini_file.name)
             except Exception:
                 pass
         return jsonify({'error': 'Failed to process the document. Please try again.'}), 500
@@ -631,12 +797,17 @@ def init_chat(user_uid):
 
 
 @app.route('/chat', methods=['POST'])
-@limiter.limit("30 per minute")
 @require_auth
+@limiter.limit("30 per minute", key_func=user_rate_limit_key)
+@limiter.limit("500 per day", key_func=user_rate_limit_key)
 def chat_with_document(user_uid):
     file_id      = request.form.get('file_id', '').strip()
+    session_ticket = request.form.get('ct', '').strip()
     user_message = request.form.get('message', '').strip()
     history_raw  = request.form.get('history', '[]')
+
+    if len(history_raw) > 100_000:
+        return jsonify({'error': 'Conversation history is too large. Please start a new session.'}), 400
 
     if not file_id:
         return jsonify({'error': 'Missing file context. Please restart the session.'}), 400
@@ -645,11 +816,14 @@ def chat_with_document(user_uid):
     if len(user_message) > 2000:
         return jsonify({'error': 'Message too long. Please keep it under 2000 characters.'}), 400
 
-    # Ownership check: a valid session may only query documents the caller
-    # uploaded themselves.
-    if file_owners.get(file_id) != user_uid:
-        logger.warning(f'chat: uid {user_uid} denied access to foreign file {file_id}')
-        return jsonify({'error': 'You do not have access to this document session.'}), 403
+    ticket_uid = verify_cleanup_ticket(
+        file_id, session_ticket, expected_uid=user_uid
+    ) if session_ticket else None
+    if ticket_uid != user_uid:
+        logger.warning(f'chat: uid {user_uid} denied access to file {file_id}')
+        return jsonify({
+            'error': 'Your document session has expired. Please re-upload your file.'
+        }), 410
 
     try:
         history_list = json.loads(history_raw)
@@ -659,7 +833,14 @@ def chat_with_document(user_uid):
         history_list = []
 
     # Cap to last 20 messages to control token usage on free tier
-    history_list = history_list[-20:]
+    history_list = [
+        {'role': entry['role'], 'content': entry['content'].strip()[:2000]}
+        for entry in history_list[-20:]
+        if isinstance(entry, dict)
+        and entry.get('role') in ('user', 'ai')
+        and isinstance(entry.get('content'), str)
+        and entry['content'].strip()
+    ]
 
     # Defensive dedupe: if a client already included the current message at
     # the end of its history, strip it so the question is never sent twice.
@@ -670,29 +851,36 @@ def chat_with_document(user_uid):
             history_list = history_list[:-1]
 
     try:
+        try:
+            gemini_client = get_gemini_client()
+        except AIUnavailableError:
+            return jsonify({
+                'error': 'AI service is not configured. Please contact the app owner.'
+            }), 503
+
         prompt = (
             "You are an expert, friendly AI tutor. "
-            "Use the attached document to answer the student's question.\n\n"
+            "Use only the attached document to answer the student's question. "
+            "When the document supports the answer, cite a short supporting phrase "
+            "and the section, slide, or page when available. "
+            "If the document does not answer the question, say so clearly instead "
+            "of adding outside facts.\n\n"
         )
         if history_list:
             prompt += "Recent conversation:\n"
             for msg in history_list:
-                if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
-                    role    = 'Student' if msg['role'] == 'user' else 'Tutor'
-                    content = str(msg['content'])[:500]
-                    prompt += f"{role}: {content}\n"
+                role    = 'Student' if msg['role'] == 'user' else 'Tutor'
+                content = str(msg['content'])[:500]
+                prompt += f"{role}: {content}\n"
 
         prompt += f"\nStudent: {user_message}\nTutor:"
 
         try:
-            gemini_file = client.files.get(name=file_id)
+            gemini_file = gemini_client.files.get(name=file_id)
         except Exception as file_err:
-            # The server restarted (wiping file_owners) or the Gemini file
-            # expired (~48 h TTL). Either way, the session is unrecoverable
-            # — tell the user clearly so they know to re-upload.
+            # The Gemini file expired (about 48 h TTL). The session cannot
+            # continue without re-uploading the source document.
             logger.warning(f'chat: gemini file {file_id} not found: {file_err}')
-            # Clean up stale owner record if it somehow survived
-            file_owners.pop(file_id, None)
             return jsonify({
                 'error': 'Your document session has expired. Please go back and re-upload your file to start a new chat.'
             }), 410
@@ -702,7 +890,7 @@ def chat_with_document(user_uid):
         last_api_error = None
         for model_name in _models_to_try():
             try:
-                response = client.models.generate_content(
+                response = gemini_client.models.generate_content(
                     model=model_name,
                     contents=[gemini_file, prompt]
                 )
@@ -723,51 +911,33 @@ def chat_with_document(user_uid):
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
 
 
-@app.route('/models')
-def list_models():
-    try:
-        models = [m.name for m in client.models.list()]
-        return jsonify(models)
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
 @app.route('/cleanup', methods=['POST'])
 @limiter.limit("60 per minute")
 def cleanup_chat():
     """
     Called when a chat session ends (Back button, sign-out, tab close).
-    Authorised either by a Bearer Firebase ID token OR by the short-lived
-    signed cleanup ticket issued at /init_chat (needed because the
-    tab-close beacon cannot send custom Authorization headers).
+    Authorised by the signed session ticket issued at /init_chat.
     Unauthorised or unowned requests are silent no-ops so attackers can't
     probe for or delete other users' hosted documents.
     """
     file_id = request.form.get('file_id', '').strip()
+    ticket = request.form.get('ct', '').strip()
+    ticket_uid = verify_cleanup_ticket(file_id, ticket) if file_id and ticket else None
 
-    uid = None
     auth_header = request.headers.get('Authorization', '')
+    authenticated_uid = None
     if auth_header.startswith('Bearer '):
         try:
-            uid = verify_firebase_id_token(auth_header[7:].strip())
+            authenticated_uid = verify_firebase_id_token(auth_header[7:].strip())
         except AuthError:
-            uid = None
-    if uid is None and file_id:
-        ticket = request.form.get('ct', '').strip()
-        owner = file_owners.get(file_id)
-        if owner and ticket and verify_cleanup_ticket(owner, file_id, ticket):
-            uid = owner
+            pass
 
-    if file_id and uid is not None:
-        owner = file_owners.get(file_id)
-        if owner == uid:
-            file_owners.pop(file_id, None)
-            try:
-                client.files.delete(name=file_id)
-                logger.info(f'cleanup: deleted Gemini file {file_id}')
-            except Exception as e:
-                logger.warning(f'cleanup: could not delete {file_id}: {e}')
-        else:
-            logger.warning(f'cleanup: ignored unowned/foreign file {file_id}')
+    if ticket_uid and (authenticated_uid is None or authenticated_uid == ticket_uid):
+        try:
+            get_gemini_client().files.delete(name=file_id)
+            logger.info(f'cleanup: deleted Gemini file {file_id}')
+        except Exception as e:
+            logger.warning(f'cleanup: could not delete {file_id}: {e}')
     return jsonify({'status': 'ok'})
 
 

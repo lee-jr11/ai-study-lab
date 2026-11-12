@@ -1,0 +1,112 @@
+:root {
+    /* Shared scales: components consume these rather than local values. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --text-xs: 0.75rem;
+    --text-sm: 0.9rem;
+    --text-base: 1rem;
+    --text-lg: 1.15rem;
+    --text-xl: 1.4rem;
+    --text-lead: clamp(1.15rem, 1.8vw, 1.4rem);
+    --text-panel: clamp(1.35rem, 2vw, 1.75rem);
+    --text-title: clamp(1.35rem, 2.5vw, 2rem);
+    --text-2xl: clamp(1.9rem, 3vw, 2.35rem);
+    --text-headline: clamp(2rem, 3.4vw, 3rem);
+    --text-hero: clamp(2rem, 4.2vw, 3.5rem);
+    --text-display: clamp(2.75rem, 7.5vw, 6rem);
+    --leading-tight: 1.15;
+    --leading-snug: 1.35;
+    --leading-body: 1.55;
+    --control-size: 44px;
+    --control-size-large: 48px;
+    --field-height: 46px;
+    --button-height: 46px;
+    --content-width: 1120px;
+    --auth-width: 500px;
+    --chrome-width: 1280px;
+    --chrome-inset: clamp(8px, 1.5vw, 16px);
+    --chrome-radius: 16px;
+    --measure-title: 12ch;
+    --measure-copy: 61ch;
+    --scrim: rgb(23 25 21 / 48%);
+    --duration-feedback: 160ms;
+    --duration-panel: 220ms;
+    --duration-flip: 420ms;
+    --layer-header: 40;
+    --layer-menu: 50;
+    --layer-overlay: 60;
+    --layer-dialog: 70;
+    --layer-notice: 90;
+    --layer-skip: 100;
+
+    --selection-ink: #202a24;
+    --on-action: #fffdf7;
+    --link: #24543e;
+    --link-hover: #193e2d;
+
+    color-scheme: light;
+    --paper: #f7f6f0;
+    --paper-deep: #eeeee5;
+    --surface: #fffef9;
+    --surface-strong: #f0f0e7;
+    --ink: #202a24;
+    --ink-soft: #46514a;
+    --ink-faint: #5b665d;
+    --line: #d4d9cf;
+    --line-strong: #859182;
+    --forest: #24543e;
+    --forest-strong: #193e2d;
+    --forest-soft: #e5ece3;
+    --oxblood: #773a32;
+    --highlight: #e8d58d;
+    --highlight-soft: #f3edd8;
+    --danger: #822f2a;
+    --danger-soft: #f0e3de;
+    --success: var(--forest);
+    --success-soft: #e5ece5;
+    --focus: var(--link);
+    /* Dashboard: exactly five colour tokens drive every surface and state. */
+    --dash-canvas: var(--paper);
+    --dash-surface: var(--surface);
+    --dash-ink: var(--ink);
+    --dash-muted: var(--ink-soft);
+    --dash-accent: var(--link);
+    --radius-small: 2px;
+    --radius-medium: 8px;
+    --radius-large: 12px;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans: "Instrument Sans", "Segoe UI", Arial, sans-serif;
+}
+
+html[data-theme="dark"] {
+    --link: #b0d8bc;
+    --link-hover: #d1ead8;
+    color-scheme: dark;
+    --paper: #181e1b;
+    --paper-deep: #202824;
+    --surface: #222b25;
+    --surface-strong: #2a342d;
+    --ink: #f2f4eb;
+    --ink-soft: #cdd5ca;
+    --ink-faint: #a6b2a3;
+    --line: #3f4c42;
+    --line-strong: #81907e;
+    --forest: #2b5e43;
+    --forest-strong: #326649;
+    --forest-soft: #2b3c30;
+    --oxblood: #e0a49b;
+    --highlight: #d8bb5e;
+    --highlight-soft: #403b26;
+    --danger: #e29a91;
+    --danger-soft: #402c28;
+    --success: #9ac6a9;
+    --success-soft: #2b3c30;
+}
+

@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/sessions/{sessionId} {
+      allow read, delete: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasAll(['type', 'createdAt'])
+        && request.resource.data.type in ['quiz', 'flashcard', 'chat', 'voice']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.size() < 900000;
+      allow update: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

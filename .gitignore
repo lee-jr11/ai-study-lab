@@ -7,3 +7,7 @@ __pycache__/
 
 # Server-side cleanup ticket signing key
 .cleanup_secret
+
+# Local design audits and scratch files
+work/
+node_modules/

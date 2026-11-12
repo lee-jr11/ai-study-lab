@@ -1,0 +1,6 @@
+{
+  "name": "study-lab-ui-checks",
+  "private": true,
+  "scripts": { "test": "node --test tests/ui_state.test.cjs" },
+  "devDependencies": { "jsdom": "^26.1.0" }
+}
