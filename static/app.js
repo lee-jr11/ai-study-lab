@@ -12,10 +12,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();   // Firestore for session history
-// Session-only persistence: refreshing or closing the tab ALWAYS requires
-// signing in again - no silent session restore, no dashboard flash.
-auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
-    .catch(err => console.error('Could not disable auth persistence:', err))
+// Keep the account signed in across reloads in this tab; closing it ends the session.
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
+    .catch(err => console.error('Could not set session persistence:', err))
     .finally(() => {
         if (typeof auth.getRedirectResult === 'function') {
             auth.getRedirectResult().catch(err => {
@@ -683,6 +682,8 @@ function resetToolInteractions() {
     hideTypingIndicator();
     try { if (activeRecognition) activeRecognition.abort(); } catch (_) {}
     activeRecognition = null;
+    document.getElementById('mic-btn').setAttribute('aria-pressed', 'false');
+    document.getElementById('mic-btn').setAttribute('aria-label', 'Use microphone');
     document.getElementById('chat-input-box').disabled = false;
     document.getElementById('chat-input-box').value = '';
     document.getElementById('chat-input-box').placeholder = 'Ask about a passage or concept';
@@ -1382,14 +1383,18 @@ function toggleTTS() {
 
 function speakText(text) {
     if (!ttsEnabled || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const plain = text.replace(/\*\*(.*?)\*\*/g,'$1').replace(/\*(.*?)\*/g,'$1').replace(/\n/g,' ');
-    const utt   = new SpeechSynthesisUtterance(plain);
-    utt.rate    = 0.95;
-    utt.pitch   = 1;
-    const btn   = document.getElementById('tts-toggle-btn');
-    if (btn) { btn.classList.add('active'); utt.onend = () => { if (ttsEnabled) btn.classList.add('active'); }; }
-    window.speechSynthesis.speak(utt);
+    try {
+        window.speechSynthesis.cancel();
+        const plain = text.replace(/\*\*(.*?)\*\*/g,'$1').replace(/\*(.*?)\*/g,'$1').replace(/\n/g,' ');
+        const utt = new SpeechSynthesisUtterance(plain);
+        utt.rate = 0.95;
+        utt.pitch = 1;
+        utt.onerror = () => { showNotice('Could not play the spoken answer. You can read it below.'); };
+        window.speechSynthesis.speak(utt);
+    } catch (err) {
+        console.warn('Speech playback failed:', err);
+        showNotice('Could not play the spoken answer. You can read it below.');
+    }
 }
 
 // Enter key sends chat message
@@ -1546,13 +1551,18 @@ let activeRecognition = null;   // kept global so teardown can stop an active se
 if (SpeechRecognition) {
     micBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        if (activeRecognition) {
+            activeRecognition.onresult = null;
+            activeRecognition.abort();
+            return;
+        }
         const recognition = new SpeechRecognition();
         const sessionVersion = toolSessionVersion;
         activeRecognition = recognition;
         recognition.continuous     = false;
         recognition.interimResults = false;
         recognition.lang           = document.documentElement.lang || navigator.language || 'en-US';
-        recognition.onstart  = () => { micBtn.classList.add('mic-active'); chatInputBox.placeholder = 'Listening…'; };
+        recognition.onstart  = () => { if (activeRecognition !== recognition || sessionVersion !== toolSessionVersion) return; micBtn.classList.add('mic-active'); micBtn.setAttribute('aria-pressed', 'true'); micBtn.setAttribute('aria-label', 'Stop microphone'); chatInputBox.placeholder = 'Listening…'; };
         recognition.onresult = (ev) => {
             if (sessionVersion !== toolSessionVersion) return;
             chatInputBox.value = ev.results[0][0].transcript;
@@ -1563,10 +1573,17 @@ if (SpeechRecognition) {
             if (sessionVersion !== toolSessionVersion) return;
             resetMic();
             if (ev.error === 'not-allowed') showNotice('Microphone access is blocked. Allow it in your browser settings.');
-            else showNotice('Microphone error: ' + ev.error);
+            else if (ev.error !== 'aborted') showNotice('Microphone error: ' + ev.error);
         };
         recognition.onend = resetMic;
-        function resetMic() { micBtn.classList.remove('mic-active'); chatInputBox.placeholder = 'Type or speak your question…'; activeRecognition = null; }
+        function resetMic() {
+            if (activeRecognition !== recognition) return;
+            micBtn.classList.remove('mic-active');
+            micBtn.setAttribute('aria-pressed', 'false');
+            micBtn.setAttribute('aria-label', 'Use microphone');
+            chatInputBox.placeholder = 'Type or speak your question…';
+            activeRecognition = null;
+        }
         try { recognition.start(); } catch (err) { resetMic(); showNotice('Microphone error: ' + err.message); }
     });
 } else {

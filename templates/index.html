@@ -429,7 +429,7 @@
         <div id="chat-ui-container" aria-label="Document conversation">
             <div class="chat-header">
                 <div class="chat-header-actions">
-                    <button class="icon-btn icon-only tts-btn" id="tts-toggle-btn" aria-label="Toggle spoken answers" aria-pressed="false" title="Toggle spoken answers" onclick="toggleTTS()">
+                    <button type="button" class="icon-btn icon-only tts-btn" id="tts-toggle-btn" aria-label="Toggle spoken answers" aria-pressed="false" title="Toggle spoken answers" onclick="toggleTTS()">
                         <i class="ph ph-speaker-high" aria-hidden="true"></i>
                     </button>
                 </div>
@@ -441,14 +441,14 @@
                 </div>
             </div>
             <div class="chat-input-wrapper">
-                <button id="mic-btn" class="icon-btn icon-only" aria-label="Use microphone" title="Use microphone">
+                <button type="button" id="mic-btn" class="icon-btn icon-only" aria-label="Use microphone" aria-pressed="false" title="Use microphone">
                     <i class="ph ph-microphone" aria-hidden="true"></i>
                 </button>
                 <label class="sr-only" for="chat-input-box">Question for the document tutor</label>
                 <input type="text" id="chat-input-box" maxlength="2000" class="auth-input" placeholder="Ask about a passage or concept">
-                <button class="primary-button compact-button" id="send-chat-btn">Send</button>
+                <button type="button" class="primary-button compact-button" id="send-chat-btn">Send</button>
             </div>
-            <button class="text-button danger-text chat-end" onclick="endChatSession()">End session</button>
+            <button type="button" class="text-button danger-text chat-end" onclick="endChatSession()">End session</button>
         </div>
 
         <!-- QUIZ CONTAINER -->
@@ -577,6 +577,6 @@
     You will be signed out in <strong id="session-countdown">2:00</strong> due to inactivity. Select anywhere to stay signed in.
 </div>
 
-<script src="{{ url_for('static', filename='app.js', v='reading-desk-15') }}"></script>
+<script src="{{ url_for('static', filename='app.js', v='reading-desk-16') }}"></script>
 </body>
 </html>

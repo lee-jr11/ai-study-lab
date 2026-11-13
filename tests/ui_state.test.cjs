@@ -7,14 +7,15 @@ const { runInContext } = require('node:vm');
 const html = readFileSync('templates/index.html', 'utf8');
 const appScript = readFileSync('static/app.js', 'utf8');
 
-function setup(t, { blockedStorage = false } = {}) {
+function setup(t, { blockedStorage = false, speechRecognition } = {}) {
     const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
     t.after(() => dom.window.close());
     const w = dom.window;
+    if (speechRecognition) w.SpeechRecognition = speechRecognition;
     const auth = { currentUser: { uid: 'test-user', getIdToken: async () => 'test-token' },
-        onAuthStateChanged() {}, setPersistence: async () => {}, signOut: async () => { auth.currentUser = null; } };
+        onAuthStateChanged() {}, setPersistence: async value => { auth.persistence = value; }, signOut: async () => { auth.currentUser = null; } };
     const authFactory = () => auth;
-    authFactory.Auth = { Persistence: { NONE: 'none' } };
+    authFactory.Auth = { Persistence: { NONE: 'none', SESSION: 'session' } };
     const db = {};
     w.firebase = { initializeApp() {}, auth: authFactory, firestore: () => db };
     if (blockedStorage) {
@@ -31,6 +32,36 @@ function setup(t, { blockedStorage = false } = {}) {
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+
+test('authentication survives page reload within the current tab', t => {
+    const { auth } = setup(t);
+    assert.equal(auth.persistence, 'session');
+});
+
+test('speech playback errors do not interrupt the conversation', t => {
+    const { w, run } = setup(t);
+    w.speechSynthesis = { cancel() {}, speak() { throw new Error('Playback unavailable'); } };
+    w.SpeechSynthesisUtterance = class {};
+    run('ttsEnabled = true');
+    assert.doesNotThrow(() => run('speakText("Answer")'));
+});
+
+test('microphone button stops the active listener without starting another', t => {
+    const instances = [];
+    class Recognition {
+        constructor() { instances.push(this); }
+        start() { this.onstart(); }
+        abort() { this.onerror({error: 'aborted'}); this.onend(); }
+    }
+    const { doc } = setup(t, { speechRecognition: Recognition });
+    const button = doc.getElementById('mic-btn');
+    button.click();
+    assert.equal(button.getAttribute('aria-label'), 'Stop microphone');
+    button.click();
+    assert.equal(instances.length, 1);
+    assert.equal(button.getAttribute('aria-pressed'), 'false');
+    assert.equal(button.getAttribute('aria-label'), 'Use microphone');
+});
 
 test('blocked storage does not prevent initialization or theme changes', t => {
     const { doc } = setup(t, { blockedStorage: true });
