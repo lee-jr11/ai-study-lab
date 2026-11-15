@@ -592,12 +592,14 @@ function openTool(mode) {
             ? 'Number of questions'
             : 'Number of flashcards';
         document.getElementById('num_questions-help').innerText = isQuiz
-            ? 'Enter a whole number from 1 to 30.'
-            : 'Enter a whole number from 1 to 30.';
+            ? 'Enter a whole number of questions from 1 to 30.'
+            : 'Enter a whole number of cards from 1 to 30.';
     }
 }
 
+const CHAT_PLACEHOLDER = 'Ask about a passage or concept';
 let toolSessionVersion = 0;
+let liveChatExchanges = 0;   // successful exchanges in the current live chat
 let generationPending = false;
 
 function setToolError(message = '') {
@@ -624,7 +626,8 @@ function validateQuestionCount() {
     const input = document.getElementById('num_questions');
     const value = input.value.trim();
     const count = Number(value);
-    if (!value) return 'Enter how many questions you want, from 1 to 30.';
+    const unit = document.getElementById('generation-mode').value === 'flashcard' ? 'cards' : 'questions';
+    if (!value) return `Enter how many ${unit} you want, from 1 to 30.`;
     if (!Number.isInteger(count)) return 'Enter a whole number from 1 to 30.';
     if (count < 1 || count > 30) return 'Enter a number from 1 to 30.';
     return '';
@@ -675,6 +678,7 @@ function setGenerationPending(pending, mode = 'quiz') {
 function resetToolInteractions() {
     toolSessionVersion++;
     generationPending = false;
+    liveChatExchanges = 0;
     setToolError();
     setUploadError();
     setQuestionCountError();
@@ -686,7 +690,7 @@ function resetToolInteractions() {
     document.getElementById('mic-btn').setAttribute('aria-label', 'Use microphone');
     document.getElementById('chat-input-box').disabled = false;
     document.getElementById('chat-input-box').value = '';
-    document.getElementById('chat-input-box').placeholder = 'Ask about a passage or concept';
+    document.getElementById('chat-input-box').placeholder = CHAT_PLACEHOLDER;
     document.getElementById('send-chat-btn').disabled = false;
     document.getElementById('send-chat-btn').innerText = 'Send';
     document.getElementById('mic-btn').disabled = !SpeechRecognition;
@@ -769,7 +773,7 @@ document.getElementById('document').addEventListener('change', function (e) {
     setUploadError(error);
     if (error) {
         this.value = '';
-        document.getElementById('file-name-display').innerText = 'Choose a PDF or PPTX';
+        document.getElementById('file-name-display').innerText = 'Drop a PDF or PPTX here';
         return;
     }
     document.getElementById('file-name-display').innerText = file.name;
@@ -901,6 +905,7 @@ document.getElementById('quizForm').addEventListener('submit', async (e) => {
             }
             activeFileId = data.file_id;
             activeCleanupTicket = data.ct || null;
+            setChatSource(file.name);
             e.target.style.display = 'none';
             showWithFade(document.getElementById('chat-ui-container'));
             if (mode === 'voice' && SpeechRecognition) document.getElementById('mic-btn').click();
@@ -1199,6 +1204,9 @@ function retakeQuiz() {
     currentIndex = 0;
     if (mode === 'quiz') {
         userAnswers = new Array(quizData.length).fill(null);
+        // A retake starts every question with a fresh clock and nothing locked.
+        questionTimeRemaining = new Array(quizData.length).fill(activeQuizTimerLimit);
+        questionTimedOut = new Array(quizData.length).fill(false);
         showWithFade(document.getElementById('quiz-container'));
         renderQuestion();
     } else if (mode === 'flashcard') {
@@ -1370,7 +1378,6 @@ function updateTTSButton() {
     btn.title   = ttsEnabled ? 'Spoken answers on. Select to mute.' : 'Spoken answers off. Select to enable.';
     btn.setAttribute('aria-pressed', ttsEnabled ? 'true' : 'false');
     btn.setAttribute('aria-label', ttsEnabled ? 'Mute spoken answers' : 'Enable spoken answers');
-    btn.style.opacity = ttsEnabled ? '1' : '0.4';
     if (ttsEnabled) btn.classList.add('active');
     else            btn.classList.remove('active');
 }
@@ -1448,6 +1455,7 @@ sendChatBtn.addEventListener('click', async () => {
         // never happened, so it must not leak into future prompts.
         chatHistory.push({ role: 'user', content: message });
         chatHistory.push({ role: 'ai', content: data.reply });
+        liveChatExchanges++;
         if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
 
         // Speak the reply in voice mode
@@ -1469,7 +1477,7 @@ sendChatBtn.addEventListener('click', async () => {
             chatMessages.appendChild(bubble);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         } else {
-            appendChatMessage('ai', 'System Error: ' + err.message);
+            appendChatMessage('ai', 'I could not answer that. ' + (err.message || 'Please try again.'));
         }
     } finally {
         if (sessionVersion === toolSessionVersion) {
@@ -1530,7 +1538,9 @@ function teardownAppState() {
 
 async function endChatSession() {
     // → Save chat to history before teardown (only if there was actual conversation)
-    if (chatHistory.length > 0) {
+    // Only save conversations that happened in this live session; a restored,
+    // read-only chat is already in history.
+    if (liveChatExchanges > 0 && chatHistory.length > 0) {
         saveSession(document.getElementById('generation-mode').value === 'voice' ? 'voice' : 'chat', {
             documentName: document.getElementById('file-name-display').innerText || 'Unknown document',
             mode: document.getElementById('generation-mode').value,
@@ -1541,6 +1551,23 @@ async function endChatSession() {
     cleanupActiveChatFile();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     resetAppToDashboard();
+}
+
+// The tool back button: chats are saved like "End session"; an in-progress quiz
+// asks before its answers are discarded.
+async function leaveTool() {
+    const chatOpen = document.getElementById('chat-ui-container').style.display === 'block';
+    if (chatOpen) { await endChatSession(); return; }
+    const quizOpen = document.getElementById('quiz-container').style.display === 'block';
+    if (quizOpen && userAnswers.some(answer => answer !== null && answer !== undefined)) {
+        if (!(await confirmAction('Leave this quiz? Your answers so far will not be saved.', 'Leave quiz'))) return;
+    }
+    resetAppToDashboard();
+}
+
+function setChatSource(name) {
+    const label = document.getElementById('chat-source-name');
+    if (label) label.textContent = name || 'Your document';
 }
 
 // ── Microphone / Speech Recognition ──
@@ -1581,7 +1608,7 @@ if (SpeechRecognition) {
             micBtn.classList.remove('mic-active');
             micBtn.setAttribute('aria-pressed', 'false');
             micBtn.setAttribute('aria-label', 'Use microphone');
-            chatInputBox.placeholder = 'Type or speak your question…';
+            chatInputBox.placeholder = CHAT_PLACEHOLDER;
             activeRecognition = null;
         }
         try { recognition.start(); } catch (err) { resetMic(); showNotice('Microphone error: ' + err.message); }
@@ -1713,7 +1740,7 @@ function downloadQuizPdf() {
     doc.setTextColor(...PDF_COLORS.paper);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
-    doc.text("Lee's AI Study Lab", margin, 42);
+    doc.text("Lee's Study Lab", margin, 42);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1818,7 +1845,7 @@ function downloadQuizPdf() {
     }
 
     const stamp = new Date().toISOString().slice(0, 10);
-    doc.save(isFlash ? `ai-study-lab-flashcards-${stamp}.pdf` : `ai-study-lab-quiz-${stamp}.pdf`);
+    doc.save(isFlash ? `study-lab-flashcards-${stamp}.pdf` : `study-lab-quiz-${stamp}.pdf`);
 }
 
 // ══════════════════════════════════════════════
@@ -1889,7 +1916,10 @@ document.getElementById('historyPanel').addEventListener('keydown', (e) => {
 
 // Close on Escape key
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeHistoryPanel();
+    if (e.key !== 'Escape') return;
+    // Escape on the confirm dialog cancels only the dialog.
+    if (document.getElementById('confirm-dialog')?.open) return;
+    closeHistoryPanel();
 });
 
 let historyLoadVersion = 0;
@@ -1910,7 +1940,7 @@ async function loadHistory() {
             .get();
         if (version !== historyLoadVersion || auth.currentUser?.uid !== user.uid) return;
         if (snap.empty) {
-            list.innerHTML = '<div class="history-empty">No sessions yet.<br>Complete a quiz, flashcard deck or chat to see your history here!</div>';
+            list.innerHTML = '<div class="history-empty">No sessions yet. Finished quizzes, flashcard decks, and chats appear here.</div>';
             return;
         }
         list.innerHTML = '';
@@ -1973,7 +2003,7 @@ async function deleteHistorySession(docId, itemEl) {
         itemEl.remove();
         const list = document.getElementById('historyList');
         if (!list.children.length) {
-            list.innerHTML = '<div class="history-empty">No sessions yet.</div>';
+            list.innerHTML = '<div class="history-empty">No sessions yet. Finished quizzes, flashcard decks, and chats appear here.</div>';
         }
     } catch (err) {
         if (auth.currentUser?.uid !== user.uid || version !== historyLoadVersion) return;
@@ -1992,8 +2022,9 @@ function restoreSession(data) {
     {
         if (data.type === 'quiz') {
             quizData    = data.quizData || [];
-            userAnswers = data.userAnswers || [];
+            userAnswers = quizData.map((_, i) => data.userAnswers?.[i] ?? null);
             if (!quizData.length) { showNotice('This session has no question data saved.'); return; }
+            document.getElementById('file-name-display').innerText = data.documentName || 'Unknown document';
             document.getElementById('dashboard-view').style.display = 'none';
             showWithFade(document.getElementById('tool-view'));
             document.getElementById('generation-mode').value = 'quiz';
@@ -2030,6 +2061,7 @@ function restoreSession(data) {
             flashcardDeck  = [...quizData];
             knewItCount    = data.knewItCount || 0;
             if (!quizData.length) { showNotice('This session has no flashcard data saved.'); return; }
+            document.getElementById('file-name-display').innerText = data.documentName || 'Unknown document';
             document.getElementById('dashboard-view').style.display = 'none';
             showWithFade(document.getElementById('tool-view'));
             document.getElementById('generation-mode').value = 'flashcard';
@@ -2068,6 +2100,7 @@ function restoreSession(data) {
             document.getElementById('tool-title').innerText  = data.type === 'voice' ? 'Voice session' : 'Chat session';
             document.getElementById('quizForm').style.display = 'none';
 
+            setChatSource(data.documentName);
             const msgBox = document.getElementById('chat-messages');
             msgBox.innerHTML = '';
             // Header banner
@@ -2132,7 +2165,7 @@ function promptResumeArchivedChat(docName, bannerEl) {
             document.getElementById('chat-input-box').disabled  = false;
             document.getElementById('send-chat-btn').disabled   = false;
             document.getElementById('mic-btn').disabled         = !SpeechRecognition;
-            document.getElementById('chat-input-box').placeholder = 'Type or speak your question…';
+            document.getElementById('chat-input-box').placeholder = CHAT_PLACEHOLDER;
             
             bannerEl.innerHTML = '<strong>Session resumed</strong><span>You can now chat normally.</span>';
             setTimeout(() => { if (bannerEl.parentNode) bannerEl.remove(); }, 4000);

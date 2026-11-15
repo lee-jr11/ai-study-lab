@@ -154,6 +154,18 @@ p {
     background-color: var(--surface);
 }
 
+/* While stuck, the header floats below the viewport edge; paint the gap above
+   it with the page colour so scrolled content never shows through. */
+.site-chrome::before {
+    position: absolute;
+    right: calc(-1 * var(--chrome-inset));
+    bottom: 100%;
+    left: calc(-1 * var(--chrome-inset));
+    height: calc(max(var(--space-2), env(safe-area-inset-top)) + 1px);
+    background-color: var(--paper);
+    content: "";
+}
+
 .site-wordmark {
     display: inline-flex;
     min-height: var(--control-size);
@@ -1490,9 +1502,32 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .chat-header {
-    justify-content: flex-end;
+    align-items: center;
     padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--line-strong);
+}
+
+.chat-source {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.chat-source i {
+    flex: none;
+    color: var(--link);
+    font-size: var(--text-lg);
+}
+
+#chat-source-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .chat-header-actions {
@@ -2587,7 +2622,6 @@ input[type="range"]::-moz-range-thumb {
         width: 100%;
     }
 
-    .chat-header,
     .fc-header,
     .review-header {
         align-items: flex-start;

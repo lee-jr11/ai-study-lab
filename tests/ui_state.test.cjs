@@ -367,3 +367,63 @@ test('account identity lives in one profile menu', t => {
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
     assert.equal(menu.style.display, 'none');
 });
+
+test('retaking a timed quiz restarts every question clock and unlocks timed-out questions', t => {
+    const { doc, run } = setup(t);
+    run(`openTool('quiz');
+        quizData=[{question:'One?',options:['A','B'],answer:'A'},{question:'Two?',options:['C','D'],answer:'C'}];
+        userAnswers=['A',null];questionTimedOut=[false,true];questionTimeRemaining=[12,0];
+        activeQuizTimerLimit=30;retakeQuiz();stopQuizTimer()`);
+    assert.equal(run('JSON.stringify(questionTimedOut)'), '[false,false]');
+    assert.equal(run('JSON.stringify(questionTimeRemaining)'), '[30,30]');
+    assert.equal(doc.querySelector('#q-options .option-btn').disabled, false);
+});
+
+test('restored quiz keeps its document name and fills missing answers as skipped', t => {
+    const { doc, run } = setup(t);
+    run(`restoreSession({type:'quiz',documentName:'Economics.pdf',
+        quizData:[{question:'One?',options:['A','B'],answer:'A'},{question:'Two?',options:['C','D'],answer:'C'}],
+        userAnswers:['A']})`);
+    assert.equal(doc.getElementById('file-name-display').innerText, 'Economics.pdf');
+    assert.equal(run('JSON.stringify(userAnswers)'), '["A",null]');
+});
+
+test('ending a restored chat without new messages does not save a duplicate', async t => {
+    const { run } = setup(t);
+    let saves = 0;
+    run(`restoreSession({type:'chat',documentName:'Lecture.pdf',chatHistory:[{role:'user',content:'Hi'}]})`);
+    const w = run('window');
+    w.saveSession = () => { saves++; };
+    await run('endChatSession()');
+    assert.equal(saves, 0);
+});
+
+test('leaving a live chat with the back button saves it like ending the session', async t => {
+    const { doc, run } = setup(t);
+    const w = run('window');
+    let saved = null;
+    run(`openTool('chat'); document.getElementById('chat-ui-container').style.display = 'block';
+        chatHistory=[{role:'user',content:'Q'},{role:'ai',content:'A'}]; liveChatExchanges=1;`);
+    w.saveSession = (type, payload) => { saved = { type, count: payload.messageCount }; };
+    await run('leaveTool()');
+    assert.deepEqual(saved, { type: 'chat', count: 1 });
+    assert.equal(doc.getElementById('dashboard-view').style.display, 'block');
+});
+
+test('escape on the delete confirmation leaves the history panel open', t => {
+    const { doc, run } = setup(t);
+    run(`document.getElementById('historyPanel').classList.add('open')`);
+    const dialog = doc.getElementById('confirm-dialog');
+    dialog.setAttribute('open', '');
+    doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.equal(doc.getElementById('historyPanel').classList.contains('open'), true);
+    dialog.removeAttribute('open');
+    doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.equal(doc.getElementById('historyPanel').classList.contains('open'), false);
+});
+
+test('flashcard count errors talk about cards, not questions', t => {
+    const { run } = setup(t);
+    run(`openTool('flashcard'); document.getElementById('num_questions').value = ''`);
+    assert.match(run('validateQuestionCount()'), /cards/);
+});
